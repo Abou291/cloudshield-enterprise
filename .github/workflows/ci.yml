@@ -83,6 +83,8 @@ jobs:
           framework: terraform
           quiet: true
       - name: Filesystem vulnerabilities
+        # Still collect dependency results if IaC fails; the failed gate remains blocking.
+        if: ${{ !cancelled() }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
