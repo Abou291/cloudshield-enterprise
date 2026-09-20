@@ -52,6 +52,13 @@ resource "aws_kms_alias" "trail" {
 }
 
 data "aws_iam_policy_document" "trail_kms" {
+  # KMS key policies require Resource "*" because the policy is attached to this
+  # exact key. Access is bounded by named service principals, SourceArn/account
+  # and encryption-context conditions below; the account-root statement only
+  # delegates administration to IAM policies in this isolated account.
+  #checkov:skip=CKV_AWS_109:KMS key-policy Resource must be star; principals and conditions scope every grant.
+  #checkov:skip=CKV_AWS_111:KMS key-policy Resource must be star; write access is principal/condition constrained.
+  #checkov:skip=CKV_AWS_356:KMS key policies cannot name their own key ARN as Resource.
   statement {
     sid       = "AccountAdministration"
     actions   = ["kms:*"]
@@ -141,6 +148,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "trail" {
     status = "Enabled"
     expiration { days = var.audit_retention_days }
     noncurrent_version_expiration { noncurrent_days = var.audit_retention_days }
+    abort_incomplete_multipart_upload { days_after_initiation = 7 }
   }
 }
 
