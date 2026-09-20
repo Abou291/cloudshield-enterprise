@@ -1,6 +1,14 @@
 import os
 
-os.environ["CLOUDSHIELD_DATABASE_URL"] = "sqlite://"
+# Only this explicitly test-only variable may override the disposable database.
+os.environ["CLOUDSHIELD_DATABASE_URL"] = os.environ.get(
+    "CLOUDSHIELD_TEST_DATABASE_URL", "sqlite://"
+)
+os.environ["CLOUDSHIELD_ENV"] = "test"
+os.environ["CLOUDSHIELD_DEMO_MODE"] = "true"
+os.environ["CLOUDSHIELD_API_KEYS"] = "[]"
+os.environ["CLOUDSHIELD_AWS_CONNECTIONS"] = "{}"
+os.environ["AWS_EC2_METADATA_DISABLED"] = "true"
 
 import pytest
 from fastapi.testclient import TestClient

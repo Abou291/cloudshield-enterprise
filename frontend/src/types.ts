@@ -7,6 +7,7 @@ export interface RiskBreakdown {
 }
 
 export interface Finding {
+  source: "demo-fixture" | "aws";
   fingerprint: string;
   rule_id: string;
   title: string;
@@ -32,3 +33,29 @@ export interface ScanResult {
   completed_at: string;
 }
 
+export interface Session {
+  tenant_id: string;
+  subject: string;
+  role: "viewer" | "operator";
+  demo: boolean;
+  aws_enabled: boolean;
+}
+
+export interface ScanHistory {
+  scan_id: string;
+  source: string;
+  status: "running" | "succeeded" | "failed" | "interrupted";
+  started_at: string;
+  completed_at: string | null;
+  assets_scanned: number;
+  findings_count: number;
+  error_code: string | null;
+}
+
+export interface AuditEvent {
+  event_id: string;
+  subject: string;
+  action: string;
+  object_id: string;
+  timestamp: string;
+}

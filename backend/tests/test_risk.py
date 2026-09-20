@@ -27,4 +27,3 @@ def test_low_context_finding_stays_low() -> None:
     result = RiskEngine().score(Severity.LOW, asset, confidence=0.5)
 
     assert result.score == 13
-

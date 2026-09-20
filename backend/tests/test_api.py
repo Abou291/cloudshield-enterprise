@@ -27,4 +27,3 @@ def test_filter_findings_by_severity(client: TestClient) -> None:
     assert response.status_code == 200
     assert len(response.json()) == 2
     assert all(item["severity"] == "critical" for item in response.json())
-

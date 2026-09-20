@@ -7,7 +7,7 @@ rules:
     confidence: 0.99
     conditions:
       - path: from_port
-        operator: equals
+        operator: tcp_port_in_range
         value: 22
       - path: source_cidr
         operator: cidr_world
@@ -21,9 +21,8 @@ rules:
     confidence: 0.99
     conditions:
       - path: from_port
-        operator: equals
+        operator: tcp_port_in_range
         value: 3389
       - path: source_cidr
         operator: cidr_world
     remediation: Remove public RDP access and use a private access path with strong authentication.
-

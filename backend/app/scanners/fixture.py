@@ -11,4 +11,3 @@ class FixtureInventoryProvider:
     def collect(self) -> list[Asset]:
         payload = json.loads(self.fixture_path.read_text(encoding="utf-8"))
         return [Asset.model_validate(item) for item in payload]
-

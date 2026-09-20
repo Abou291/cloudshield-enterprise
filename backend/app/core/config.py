@@ -1,20 +1,57 @@
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class ApiPrincipal(BaseModel):
+    key_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    tenant_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    subject: str = Field(min_length=1, max_length=100)
+    role: Literal["viewer", "operator"] = "viewer"
+
+
+class AwsConnection(BaseModel):
+    role_arn: str = Field(pattern=r"^arn:aws:iam::[0-9]{12}:role/.+$")
+    external_id: str = Field(min_length=16, max_length=1224)
+    account_id: str = Field(pattern=r"^[0-9]{12}$")
+    region: str = "eu-west-3"
+
+    @model_validator(mode="after")
+    def validate_account(self) -> "AwsConnection":
+        if self.role_arn.split(":")[4] != self.account_id:
+            raise ValueError("Role ARN must belong to the configured account")
+        return self
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="CLOUDSHIELD_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="CLOUDSHIELD_", env_file=".env", extra="ignore")
 
     app_name: str = "CloudShield Enterprise"
-    env: str = "development"
+    env: Literal["development", "test", "production"] = "development"
+    demo_mode: bool = True
+    api_keys: list[ApiPrincipal] = Field(default_factory=list)
+    aws_connections: dict[str, AwsConnection] = Field(default_factory=dict)
     database_url: str = "sqlite:///./cloudshield.db"
     cors_origins: list[str] = ["http://localhost:5173"]
     aws_region: str = "eu-west-3"
     aws_role_arn: str | None = None
+
+    @model_validator(mode="after")
+    def validate_security(self) -> "Settings":
+        if self.env == "production" and self.demo_mode:
+            raise ValueError("Production requires CLOUDSHIELD_DEMO_MODE=false")
+        if not self.demo_mode and not self.api_keys:
+            raise ValueError("Authenticated mode requires API key hashes")
+        if self.demo_mode and self.api_keys:
+            raise ValueError("Demo mode cannot be combined with API keys")
+        hashes = [key.key_sha256 for key in self.api_keys]
+        if len(hashes) != len(set(hashes)):
+            raise ValueError("Each API key hash must be unique")
+        if "*" in self.cors_origins:
+            raise ValueError("Explicit CORS origins are required")
+        return self
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -27,4 +64,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

@@ -10,6 +10,7 @@ from app.db.models import FindingRecord
 def to_domain(record: FindingRecord) -> Finding:
     return Finding(
         fingerprint=record.fingerprint,
+        source=record.source,
         rule_id=record.rule_id,
         title=record.title,
         description=record.description,
@@ -32,16 +33,20 @@ def to_domain(record: FindingRecord) -> Finding:
 
 
 class FindingRepository:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, tenant_id: str, source: str = "demo-fixture") -> None:
         self.db = db
+        self.tenant_id = tenant_id
+        self.source = source
 
     def upsert_many(self, findings: list[Finding]) -> None:
         now = datetime.now(UTC)
         for finding in findings:
-            record = self.db.get(FindingRecord, finding.fingerprint)
+            record = self.db.get(FindingRecord, (self.tenant_id, self.source, finding.fingerprint))
             if record is None:
                 record = FindingRecord(
                     fingerprint=finding.fingerprint,
+                    tenant_id=self.tenant_id,
+                    source=self.source,
                     first_seen_at=finding.first_seen_at,
                 )
                 self.db.add(record)
@@ -60,11 +65,18 @@ class FindingRepository:
             record.risk_reasons = finding.risk.reasons
             record.risk_factors = finding.risk.factors
             record.last_seen_at = now
-        self.db.commit()
+        self.db.flush()
 
-    def list(self, severity: Severity | None = None, limit: int = 100) -> list[Finding]:
-        query = select(FindingRecord).order_by(FindingRecord.risk_score.desc()).limit(limit)
+    def list(
+        self, severity: Severity | None = None, limit: int = 100, offset: int = 0
+    ) -> list[Finding]:
+        query = (
+            select(FindingRecord)
+            .where(FindingRecord.tenant_id == self.tenant_id, FindingRecord.source == self.source)
+            .order_by(FindingRecord.risk_score.desc(), FindingRecord.fingerprint)
+            .offset(offset)
+            .limit(limit)
+        )
         if severity:
             query = query.where(FindingRecord.severity == severity.value)
         return [to_domain(record) for record in self.db.scalars(query).all()]
-
