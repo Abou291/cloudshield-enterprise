@@ -1,0 +1,66 @@
+[
+  {
+    "resource_id": "arn:aws:iam::111122223333:user/demo-admin",
+    "resource_type": "iam_user",
+    "account_id": "111122223333",
+    "region": "global",
+    "name": "demo-admin",
+    "attributes": {
+      "mfa_enabled": false,
+      "oldest_access_key_days": 147,
+      "administrator_access": true
+    },
+    "context": {
+      "environment": "production",
+      "privileged": true
+    }
+  },
+  {
+    "resource_id": "arn:aws:s3:::cloudshield-demo-public",
+    "resource_type": "s3_bucket",
+    "account_id": "111122223333",
+    "region": "eu-west-3",
+    "name": "cloudshield-demo-public",
+    "attributes": {
+      "public": true,
+      "encrypted": false,
+      "logging_enabled": false
+    },
+    "context": {
+      "environment": "production",
+      "internet_exposed": true,
+      "sensitive_data": true
+    }
+  },
+  {
+    "resource_id": "sg-0123456789abcdef0:22:0.0.0.0/0",
+    "resource_type": "security_group_rule",
+    "account_id": "111122223333",
+    "region": "eu-west-3",
+    "name": "demo-public-ssh",
+    "attributes": {
+      "from_port": 22,
+      "source_cidr": "0.0.0.0/0"
+    },
+    "context": {
+      "environment": "development",
+      "internet_exposed": true
+    }
+  },
+  {
+    "resource_id": "sg-0123456789abcdef0:443:0.0.0.0/0",
+    "resource_type": "security_group_rule",
+    "account_id": "111122223333",
+    "region": "eu-west-3",
+    "name": "demo-public-https",
+    "attributes": {
+      "from_port": 443,
+      "source_cidr": "0.0.0.0/0"
+    },
+    "context": {
+      "environment": "production",
+      "internet_exposed": true
+    }
+  }
+]
+

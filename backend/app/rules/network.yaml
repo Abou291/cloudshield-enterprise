@@ -1,0 +1,29 @@
+rules:
+  - id: NET-001
+    name: SSH exposed to the Internet
+    description: A security-group ingress rule allows SSH from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.99
+    conditions:
+      - path: from_port
+        operator: equals
+        value: 22
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Restrict port 22 to a trusted administrative network or use AWS Systems Manager.
+
+  - id: NET-002
+    name: RDP exposed to the Internet
+    description: A security-group ingress rule allows RDP from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.99
+    conditions:
+      - path: from_port
+        operator: equals
+        value: 3389
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove public RDP access and use a private access path with strong authentication.
+

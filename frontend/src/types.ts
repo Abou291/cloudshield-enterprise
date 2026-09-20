@@ -1,0 +1,34 @@
+export type Severity = "critical" | "high" | "medium" | "low";
+
+export interface RiskBreakdown {
+  score: number;
+  reasons: string[];
+  factors: Record<string, number>;
+}
+
+export interface Finding {
+  fingerprint: string;
+  rule_id: string;
+  title: string;
+  description: string;
+  severity: Severity;
+  resource_id: string;
+  resource_type: string;
+  account_id: string;
+  region: string;
+  evidence: Record<string, unknown>;
+  recommendation: string;
+  status: string;
+  risk: RiskBreakdown;
+  last_seen_at: string;
+}
+
+export interface ScanResult {
+  scan_id: string;
+  source: string;
+  assets_scanned: number;
+  findings_count: number;
+  findings: Finding[];
+  completed_at: string;
+}
+

@@ -1,0 +1,35 @@
+rules:
+  - id: IAM-001
+    name: IAM user without MFA
+    description: A console-capable IAM user is not protected by multi-factor authentication.
+    resource_type: iam_user
+    severity: high
+    confidence: 0.95
+    conditions:
+      - path: mfa_enabled
+        operator: is_false
+    remediation: Enable MFA and prefer federated, short-lived access through IAM Identity Center.
+
+  - id: IAM-002
+    name: IAM user has AdministratorAccess
+    description: An IAM user has the AWS-managed AdministratorAccess policy attached directly.
+    resource_type: iam_user
+    severity: critical
+    confidence: 0.98
+    conditions:
+      - path: administrator_access
+        operator: is_true
+    remediation: Remove direct administrator access and grant task-specific permissions through roles.
+
+  - id: IAM-003
+    name: IAM access key older than 90 days
+    description: A long-lived access key is older than the configured rotation threshold.
+    resource_type: iam_user
+    severity: medium
+    confidence: 0.90
+    conditions:
+      - path: oldest_access_key_days
+        operator: older_than_days
+        value: 90
+    remediation: Disable and rotate the key, then migrate the workload to short-lived role credentials.
+

@@ -1,0 +1,34 @@
+rules:
+  - id: S3-001
+    name: Public S3 bucket
+    description: The S3 bucket policy or access controls make the bucket publicly accessible.
+    resource_type: s3_bucket
+    severity: critical
+    confidence: 0.98
+    conditions:
+      - path: public
+        operator: is_true
+    remediation: Enable S3 Block Public Access and remove public ACL or policy statements.
+
+  - id: S3-002
+    name: S3 default encryption disabled
+    description: The bucket has no explicit default server-side encryption configuration.
+    resource_type: s3_bucket
+    severity: medium
+    confidence: 0.85
+    conditions:
+      - path: encrypted
+        operator: is_false
+    remediation: Configure default SSE-S3 or SSE-KMS encryption and restrict KMS key access.
+
+  - id: S3-003
+    name: S3 access logging disabled
+    description: Server access logging is not configured for the bucket.
+    resource_type: s3_bucket
+    severity: low
+    confidence: 0.80
+    conditions:
+      - path: logging_enabled
+        operator: is_false
+    remediation: Enable access logging to a dedicated protected log bucket.
+
