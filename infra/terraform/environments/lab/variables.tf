@@ -22,3 +22,13 @@ variable "enable_vulnerable_lab" {
   default     = false
 }
 
+variable "audit_retention_days" {
+  description = "Retention for isolated-lab CloudTrail and VPC flow logs."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = contains([30, 60, 90, 120, 150, 180, 365], var.audit_retention_days)
+    error_message = "Use a CloudWatch-supported retention period of at least 30 days."
+  }
+}
