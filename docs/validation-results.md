@@ -13,33 +13,35 @@ security certification or a claim of zero vulnerabilities.
 - GitHub Semgrep runs 263 rules on 31 targets with zero findings in the configured rulesets.
 - No real AWS credentials, scans, Terraform deployment or customer data were used.
 
-## Blocking infrastructure findings
+## Infrastructure validation
 
-The first executable security run found **18 failed Checkov checks**, 29 passes
-and zero suppressions in the existing, unchanged Terraform laboratory. Reference:
+The first executable security run found 18 failed Checkov checks in the original
+Terraform laboratory. Reference:
 https://github.com/Abou291/cloudshield-enterprise/actions/runs/35523843250
 
-| Resource | Failed checks | Count |
-|---|---|---|
-| aws_cloudtrail.lab | CKV_AWS_252 (SNS), CKV_AWS_35 (KMS), CKV2_AWS_10 (CloudWatch integration) | 3 |
-| aws_vpc.lab | CKV2_AWS_12 (default security group), CKV2_AWS_11 (flow logs) | 2 |
-| aws_s3_bucket.trail | CKV_AWS_18 (access logs), CKV2_AWS_62 (notifications), CKV2_AWS_61 (lifecycle), CKV_AWS_144 (replication), CKV_AWS_145 (KMS) | 5 |
-| aws_s3_bucket.vulnerable_demo | The same five S3 checks plus CKV_AWS_21 (versioning), CKV2_AWS_6 (public access block) | 7 |
-| aws_security_group.vulnerable_ssh | CKV2_AWS_5 (unattached security group) | 1 |
+The lab baseline was then hardened with:
 
-Some resources are intentionally vulnerable and disabled by default, but that is
-not a blanket exemption for the laboratory's logging infrastructure. The checks
-remain enabled and blocking. No skip list, baseline suppression or soft-fail was added.
+- a rotating KMS key with constrained CloudTrail, CloudWatch, SNS and S3 grants;
+- KMS encryption for trail storage, log groups and the security-events topic;
+- CloudTrail delivery to CloudWatch, log-file validation and SNS notification;
+- VPC flow logs and a restricted default security group;
+- bucket versioning, lifecycle retention, incomplete-upload cleanup and notifications;
+- at least one year of CloudWatch audit-log retention.
 
-Before merging for deployment:
+The successful security run reports **126 passed, 0 failed and 13 skipped Checkov
+checks**. Gitleaks, Semgrep and Trivy also pass. Reference:
+https://github.com/Abou291/cloudshield-enterprise/actions/runs/35524442689
 
-1. Harden the CloudTrail/logging/VPC baseline in a dedicated infrastructure increment.
-2. Separate intentionally vulnerable fixtures from protective infrastructure.
-3. Document any narrowly justified lab-only exception (e.g. replication cost) with
-   resource scope, rationale and review date; do not broadly suppress a check.
-4. Validate Terraform syntax and provider configuration, inspect an authorized plan,
-   then separately authorize any deployment and cost.
-5. Complete the Trivy dependency check, which originally could not run after Checkov failed.
+The 13 inline exceptions are resource-specific and reviewable: ten cover the
+disabled-by-default negative-test S3/security-group fixtures, two cover access
+logging recursion and cross-region replication in the isolated cost-bounded trail
+bucket, and three cover the AWS requirement that KMS key policies use `Resource: "*"`.
+The KMS grants remain constrained by principals, source account/ARN and encryption
+context. No global skip list or soft-fail is configured.
+
+No Terraform plan or apply was run. Before deploying the lab, inspect a plan in
+the dedicated account, verify the external trust/KMS policies and authorize the
+AWS cost separately. Passing static checks does not prove runtime correctness.
 
 ## CI repairs
 
@@ -48,5 +50,6 @@ then depended on an unavailable setup action. The workflow now pins the verified
 v0.36.0 commit, whose setup dependency is also commit-pinned. Trivy is configured
 to execute even if an earlier scan fails; the earlier failure still blocks CI.
 
-The PR remains a draft while these gates are unresolved. The application changes
-are reviewable and useful for local evaluation, but are not an approved production release.
+All configured CI gates now pass. This validates the reviewed repository state;
+it does not make the prototype an approved production service. The limitations in
+`security-foundation.md` still apply.
