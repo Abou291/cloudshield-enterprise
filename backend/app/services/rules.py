@@ -42,6 +42,17 @@ def _matches(condition: RuleCondition, attributes: dict[str, Any]) -> bool:
     match condition.operator:
         case "equals":
             return actual == expected
+        case "tcp_port_in_range":
+            protocol = attributes.get("protocol", "tcp")
+            if protocol == "-1":
+                return True
+            upper = attributes.get("to_port", actual)
+            return (
+                protocol in {"tcp", "6"}
+                and isinstance(actual, int)
+                and isinstance(upper, int)
+                and actual <= expected <= upper
+            )
         case "not_equals":
             return actual != expected
         case "contains":
@@ -88,6 +99,11 @@ class RuleEngine:
                     condition.path: _get_path(asset.attributes, condition.path)
                     for condition in rule.conditions
                 }
+                if any(c.operator == "tcp_port_in_range" for c in rule.conditions):
+                    evidence["protocol"] = asset.attributes.get("protocol", "tcp")
+                    evidence["to_port"] = asset.attributes.get(
+                        "to_port", asset.attributes.get("from_port")
+                    )
                 fingerprint = hashlib.sha256(
                     f"{asset.account_id}|{asset.region}|{asset.resource_id}|{rule.id}".encode()
                 ).hexdigest()
@@ -108,4 +124,3 @@ class RuleEngine:
                     )
                 )
         return sorted(findings, key=lambda finding: finding.risk.score, reverse=True)
-

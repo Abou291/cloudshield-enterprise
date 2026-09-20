@@ -36,6 +36,7 @@ class RiskBreakdown(BaseModel):
 
 class Finding(BaseModel):
     fingerprint: str
+    source: str = "demo-fixture"
     rule_id: str
     title: str
     description: str
@@ -60,3 +61,23 @@ class ScanResult(BaseModel):
     findings: list[Finding]
     completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+
+class ScanHistory(BaseModel):
+    model_config = {"from_attributes": True}
+    scan_id: str
+    source: str
+    status: str
+    started_at: datetime
+    completed_at: datetime | None
+    assets_scanned: int
+    findings_count: int
+    error_code: str | None
+
+
+class AuditEvent(BaseModel):
+    model_config = {"from_attributes": True}
+    event_id: str
+    subject: str
+    action: str
+    object_id: str
+    timestamp: datetime

@@ -16,6 +16,20 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cloudshield_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d cloudshield_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,6 +39,9 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - run: pip install -e "./backend[dev]"
       - run: ruff check backend/app backend/tests
+      - name: Select disposable PostgreSQL database
+        if: matrix.database == 'postgres'
+        run: echo "CLOUDSHIELD_TEST_DATABASE_URL=postgresql+psycopg://test:test@localhost:5432/cloudshield_test" >> "$GITHUB_ENV"
       - run: cd backend && pytest --cov-fail-under=75
 
   frontend:
@@ -66,7 +83,9 @@ jobs:
           framework: terraform
           quiet: true
       - name: Filesystem vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        # Still collect dependency results if IaC fails; the failed gate remains blocking.
+        if: ${{ !cancelled() }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .

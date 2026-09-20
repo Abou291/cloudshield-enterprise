@@ -67,4 +67,3 @@ class RiskEngine:
         reasons.append(f"Detection confidence ({confidence:.0%}) +{confidence_points}")
 
         return RiskBreakdown(score=min(score, 100), reasons=reasons, factors=factors)
-
