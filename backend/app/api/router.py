@@ -2,16 +2,18 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth import Identity, Operator
-from app.core.config import get_settings
+from app.core.config import AwsConnection, get_settings
 from app.core.domain import AuditEvent, Finding, ScanHistory, ScanResult, Severity
 from app.db.models import AuditRecord, ScanRecord
 from app.db.session import get_db
 from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
+from app.services.desktop_connection import DesktopConnectionStore
 from app.services.findings import FindingRepository
 from app.services.scans import ScanBusyError, ScanFailedError, ScanService
 
@@ -24,12 +26,75 @@ Offset = Annotated[int, Query(ge=0, le=100000)]
 
 @router.get("/session")
 def session(principal: Identity) -> dict:
+    settings = get_settings()
+    desktop_connection = DesktopConnectionStore(settings.desktop_config_path).get()
     return {
         **principal.model_dump(),
         "aws_enabled": (
-            not principal.demo and principal.tenant_id in get_settings().aws_connections
+            principal.tenant_id in settings.aws_connections
+            or (settings.desktop_mode and desktop_connection is not None)
         ),
     }
+
+
+class DesktopAwsConnectionInput(AwsConnection):
+    pass
+
+
+class DesktopAwsConnectionView(BaseModel):
+    role_arn: str
+    account_id: str
+    region: str
+
+
+def local_connection() -> AwsConnection | None:
+    settings = get_settings()
+    if not settings.desktop_mode:
+        return None
+    return DesktopConnectionStore(settings.desktop_config_path).get()
+
+
+@router.get("/connections/aws", response_model=DesktopAwsConnectionView)
+def get_desktop_aws_connection(principal: Operator) -> DesktopAwsConnectionView:
+    connection = local_connection()
+    if connection is None:
+        raise HTTPException(404, "No desktop AWS connection configured")
+    return DesktopAwsConnectionView(
+        role_arn=connection.role_arn, account_id=connection.account_id, region=connection.region
+    )
+
+
+@router.put("/connections/aws", response_model=DesktopAwsConnectionView)
+def save_desktop_aws_connection(
+    payload: DesktopAwsConnectionInput, principal: Operator
+) -> DesktopAwsConnectionView:
+    settings = get_settings()
+    if not settings.desktop_mode:
+        raise HTTPException(404, "AWS desktop configuration is unavailable")
+    DesktopConnectionStore(settings.desktop_config_path).save(payload)
+    return DesktopAwsConnectionView(
+        role_arn=payload.role_arn, account_id=payload.account_id, region=payload.region
+    )
+
+
+@router.post("/connections/aws/test", response_model=DesktopAwsConnectionView)
+def test_desktop_aws_connection(
+    payload: DesktopAwsConnectionInput, principal: Operator
+) -> DesktopAwsConnectionView:
+    settings = get_settings()
+    if not settings.desktop_mode:
+        raise HTTPException(404, "AWS desktop configuration is unavailable")
+    try:
+        AwsInventoryProvider(
+            payload.region, payload.role_arn, payload.external_id, payload.account_id
+        )
+    except Exception as exc:
+        raise HTTPException(
+            422, "AWS role validation failed. Check AWS SSO/profile and trust policy."
+        ) from exc
+    return DesktopAwsConnectionView(
+        role_arn=payload.role_arn, account_id=payload.account_id, region=payload.region
+    )
 
 
 @router.get("/health")
@@ -120,8 +185,8 @@ def run_demo_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
 @router.post("/scans/aws", response_model=ScanResult, status_code=status.HTTP_201_CREATED)
 def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
     settings = get_settings()
-    connection = settings.aws_connections.get(principal.tenant_id)
-    if principal.demo or connection is None:
+    connection = settings.aws_connections.get(principal.tenant_id) or local_connection()
+    if connection is None or (principal.demo and not settings.desktop_mode):
         raise HTTPException(403, "AWS scanning requires an authenticated, configured organization")
     return execute_scan(
         ScanService(
