@@ -1,15 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Cloud, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 
-import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan } from "./api";
+import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection } from "./api";
 import AccessGate from "./AccessGate";
-import type { AuditEvent, Finding, ScanHistory, Session, Severity } from "./types";
+import type { AuditEvent, AwsConnectionInput, Finding, ScanHistory, Session, Severity } from "./types";
 import "./styles.css";
 
 const severityOrder: Severity[] = ["critical", "high", "medium", "low"];
 
 function SeverityBadge({ severity }: { severity: Severity }) {
   return <span className={`badge badge-${severity}`}>{severity}</span>;
+}
+
+function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
+  const [connection, setConnection] = useState<AwsConnectionInput>({ role_arn: "", external_id: "", account_id: "", region: "eu-west-3" });
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const update = (field: keyof AwsConnectionInput, value: string) => setConnection((current) => ({ ...current, [field]: value }));
+  const validate = async () => {
+    setBusy(true); setMessage(null);
+    try { await testAwsConnection(connection); setMessage("AWS role validated. You can save this connection."); }
+    catch (caught) { setMessage(caught instanceof Error ? caught.message : "AWS role validation failed"); }
+    finally { setBusy(false); }
+  };
+  const save = async () => {
+    setBusy(true); setMessage(null);
+    try { await saveAwsConnection(connection); setMessage("Connection saved locally. AWS credentials were not stored."); onDone(); }
+    catch (caught) { setMessage(caught instanceof Error ? caught.message : "Could not save connection"); }
+    finally { setBusy(false); }
+  };
+  return <section className="panel connection-panel" id="connection">
+    <div className="panel-title"><div><h2>Connect an AWS account</h2><p>Uses your local AWS SSO/profile to assume a read-only role. No access key is stored.</p></div></div>
+    <form onSubmit={(event) => { event.preventDefault(); void validate(); }}>
+      <label>Role ARN<input required value={connection.role_arn} onChange={(event) => update("role_arn", event.target.value)} placeholder="arn:aws:iam::123456789012:role/aegisshield-readonly" /></label>
+      <label>Account ID<input required pattern="[0-9]{12}" value={connection.account_id} onChange={(event) => update("account_id", event.target.value)} placeholder="123456789012" /></label>
+      <label>External ID<input required minLength={16} value={connection.external_id} onChange={(event) => update("external_id", event.target.value)} placeholder="A unique value from the AWS trust policy" /></label>
+      <label>Default region<input required value={connection.region} onChange={(event) => update("region", event.target.value)} placeholder="eu-west-3" /></label>
+      <div className="connection-actions"><button disabled={busy} type="submit">{busy ? "Validating…" : "Validate AWS role"}</button><button disabled={busy} type="button" onClick={() => void save()}>Save connection</button></div>
+    </form>
+    {message && <p className={message.startsWith("AWS role validated") || message.startsWith("Connection saved") ? "notice" : "error"}>{message}</p>}
+  </section>;
 }
 
 function Dashboard({ session, logout }: { session: Session; logout: () => void }) {
@@ -24,6 +54,7 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
   const [offset, setOffset] = useState(0);
   const [revision, setRevision] = useState(0);
   const [fetching, setFetching] = useState(true);
+  const [showConnection, setShowConnection] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -73,8 +104,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand"><ShieldCheck size={28} /><span>CloudShield</span></div>
-        <p className="edition">Enterprise · Security foundation</p>
+        <div className="brand"><ShieldCheck size={28} /><span>AegisShield</span></div>
+        <p className="edition">Desktop · Security foundation</p>
         <nav>
           <a className="active" href="#overview"><Activity size={18} /> Overview</a>
           <a href="#findings"><TriangleAlert size={18} /> Findings</a>
@@ -122,6 +153,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
           {latestScan.status !== "succeeded" && " Displayed findings may be stale."}</p>}
         {error && <div role="alert" className="error">{error}</div>}
         {scanError && <div role="alert" className="error">{scanError}</div>}
+        {!session.aws_enabled && <button className="connect-aws" onClick={() => setShowConnection(true)}>Connect AWS account</button>}
+        {showConnection && <AwsConnectionSetup onDone={() => { setShowConnection(false); window.location.reload(); }} />}
 
         <section className="score-grid" id="overview">
           <article className="score-card">
