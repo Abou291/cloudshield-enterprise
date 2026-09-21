@@ -1,4 +1,4 @@
-import type { AuditEvent, Finding, ScanHistory, ScanResult, Session } from "./types";
+import type { AuditEvent, AwsConnectionInput, AwsConnectionView, Finding, ScanHistory, ScanResult, Session } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 // Intentionally memory-only: reload/logout forgets the token.
@@ -30,3 +30,10 @@ export const runAwsScan = () => request<ScanResult>("/scans/aws", { method: "POS
 
 export const runDemoScan = () =>
   request<ScanResult>("/scans/demo", { method: "POST" });
+
+export const testAwsConnection = (connection: AwsConnectionInput) => request<AwsConnectionView>(
+  "/connections/aws/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(connection) },
+);
+export const saveAwsConnection = (connection: AwsConnectionInput) => request<AwsConnectionView>(
+  "/connections/aws", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(connection) },
+);
