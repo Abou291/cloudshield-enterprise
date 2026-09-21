@@ -28,13 +28,13 @@ class AwsConnection(BaseModel):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CLOUDSHIELD_", env_file=".env", extra="ignore")
 
-    app_name: str = "CloudShield Enterprise"
+    app_name: str = "AegisShield"
     env: Literal["development", "test", "production"] = "development"
     demo_mode: bool = True
     api_keys: list[ApiPrincipal] = Field(default_factory=list)
     aws_connections: dict[str, AwsConnection] = Field(default_factory=dict)
     database_url: str = "sqlite:///./cloudshield.db"
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     aws_region: str = "eu-west-3"
     aws_role_arn: str | None = None
 
