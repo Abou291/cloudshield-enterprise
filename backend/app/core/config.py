@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -37,6 +38,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     aws_region: str = "eu-west-3"
     aws_role_arn: str | None = None
+    desktop_mode: bool = False
+    desktop_config_path: Path | None = None
 
     @model_validator(mode="after")
     def validate_security(self) -> "Settings":
