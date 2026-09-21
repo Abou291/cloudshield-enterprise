@@ -41,6 +41,19 @@ export interface Session {
   aws_enabled: boolean;
 }
 
+export interface AwsConnectionInput {
+  role_arn: string;
+  external_id: string;
+  account_id: string;
+  region: string;
+}
+
+export interface AwsConnectionView {
+  role_arn: string;
+  account_id: string;
+  region: string;
+}
+
 export interface ScanHistory {
   scan_id: string;
   source: string;
