@@ -1,0 +1,27 @@
+{
+  "name": "aegisshield-desktop",
+  "version": "0.3.0",
+  "private": true,
+  "description": "AegisShield desktop cloud security console",
+  "main": "src/main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "package:win": "npm run build:ui && electron-builder --win nsis",
+    "build:ui": "npm --prefix ../frontend run build:desktop"
+  },
+  "devDependencies": {
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.abou291.aegisshield",
+    "productName": "AegisShield",
+    "files": ["src/**", "package.json"],
+    "extraResources": [
+      { "from": "../frontend/dist", "to": "ui" },
+      { "from": "../backend/dist", "to": "backend" }
+    ],
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}
