@@ -16,3 +16,15 @@ frontend/vite.config.d.ts
 *.tfstate.*
 crash.log
 .DS_Store
+
+# Local secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+.aws/
+.env.*
+!.env.example
+!frontend/.env.example
+!frontend/.env.desktop
