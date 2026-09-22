@@ -15,6 +15,7 @@ from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
 from app.services.desktop_connection import DesktopConnectionStore
 from app.services.findings import FindingRepository
+from app.services.assistant import ask_llm
 from app.services.scans import ScanBusyError, ScanFailedError, ScanService
 
 router = APIRouter(prefix="/api/v1")
@@ -39,6 +40,30 @@ def session(principal: Identity) -> dict:
 
 class DesktopAwsConnectionInput(AwsConnection):
     pass
+
+
+class AssistantRequest(BaseModel):
+    question: str
+    source: Literal["demo-fixture", "aws"] = "demo-fixture"
+
+
+class AssistantResponse(BaseModel):
+    answer: str
+    model: str
+    findings_used: int
+
+
+@router.post("/assistant", response_model=AssistantResponse)
+def assistant(payload: AssistantRequest, db: DatabaseSession, principal: Identity) -> AssistantResponse:
+    question = payload.question.strip()
+    if not question or len(question) > 2000:
+        raise HTTPException(422, "Question must contain between 1 and 2000 characters")
+    findings = FindingRepository(db, principal.tenant_id, payload.source).list(None, 30, 0)
+    try:
+        answer, model = ask_llm(get_settings(), question, findings)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Security copilot provider is temporarily unavailable") from exc
+    return AssistantResponse(answer=answer, model=model, findings_used=len(findings))
 
 
 class DesktopAwsConnectionView(BaseModel):
