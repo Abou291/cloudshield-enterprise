@@ -3,6 +3,7 @@ import { Activity, Cloud, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-r
 
 import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection } from "./api";
 import AccessGate from "./AccessGate";
+import SecurityCopilot from "./SecurityCopilot";
 import type { AuditEvent, AwsConnectionInput, Finding, ScanHistory, Session, Severity } from "./types";
 import "./styles.css";
 
@@ -229,6 +230,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
           </table></div>
         </section>
       </main>
+
+      <SecurityCopilot findings={findings} />
 
       {selected && (
         <div className="overlay" role="presentation" onClick={() => setSelected(null)}>
