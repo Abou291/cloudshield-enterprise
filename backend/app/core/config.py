@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     aws_role_arn: str | None = None
     desktop_mode: bool = False
     desktop_config_path: Path | None = None
+    ai_api_key: str | None = None
+    ai_base_url: str = "https://api.openai.com/v1"
+    ai_model: str = "gpt-4.1-mini"
 
     @model_validator(mode="after")
     def validate_security(self) -> "Settings":
