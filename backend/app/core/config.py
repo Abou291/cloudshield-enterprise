@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     ai_api_key: str | None = None
     ai_base_url: str = "https://api.openai.com/v1"
     ai_model: str = "gpt-4.1-mini"
+    rate_limit_per_minute: int = Field(default=120, ge=10, le=10000)
 
     @model_validator(mode="after")
     def validate_security(self) -> "Settings":
