@@ -107,3 +107,15 @@ jobs:
           node-version: "22"
       - run: npm ci && npm audit --audit-level=high
         working-directory: frontend
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Generate repository SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: aegisshield-sbom.cdx.json
+          upload-artifact: true
