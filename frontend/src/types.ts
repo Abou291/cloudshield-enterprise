@@ -72,3 +72,6 @@ export interface AuditEvent {
   object_id: string;
   timestamp: string;
 }
+
+export interface AssistantResponse { answer: string; model: string; findings_used: number; }
+export interface AssistantMessage { role: "user" | "assistant"; content: string; model?: string; }
