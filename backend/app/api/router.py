@@ -31,6 +31,7 @@ def session(principal: Identity) -> dict:
     desktop_connection = DesktopConnectionStore(settings.desktop_config_path).get()
     return {
         **principal.model_dump(),
+        "desktop": settings.desktop_mode,
         "aws_enabled": (
             principal.tenant_id in settings.aws_connections
             or (settings.desktop_mode and desktop_connection is not None)
