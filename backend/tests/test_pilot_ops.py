@@ -16,6 +16,7 @@ def test_diagnostics_and_security_report(client):
     assert body["schema"] == "aegisshield.security-report.v1"
     assert body["summary"]["findings"] == 7
     assert body["summary"]["highest_risk"] is not None
+    assert len(body["integrity_sha256"]) == 64
     assert len(body["findings"]) == 7
 
 
