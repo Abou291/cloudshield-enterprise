@@ -85,6 +85,11 @@ def test_iam_pagination_and_inactive_keys():
         "CreateDate": now,
     }
     with Stubber(client) as stub:
+        stub.add_response(
+            "get_account_summary",
+            {"SummaryMap": {"AccountMFAEnabled": 1, "AccountAccessKeysPresent": 0}},
+            {},
+        )
         stub.add_response("list_users", {"Users": [user], "IsTruncated": False}, {})
         stub.add_response(
             "list_mfa_devices", {"MFADevices": [], "IsTruncated": False}, {"UserName": "alice"}
@@ -124,8 +129,10 @@ def test_iam_pagination_and_inactive_keys():
         )
         assets = provider._collect_iam()
         stub.assert_no_pending_responses()
-    assert assets[0].attributes["administrator_access"] is True
-    assert assets[0].attributes["oldest_access_key_days"] == 0
+    assert assets[0].resource_type == "iam_account"
+    assert assets[0].attributes["root_mfa_enabled"] is True
+    assert assets[1].attributes["administrator_access"] is True
+    assert assets[1].attributes["oldest_access_key_days"] == 0
 
 
 def test_identity_binding_and_external_id(monkeypatch):
@@ -155,7 +162,7 @@ def test_identity_binding_and_external_id(monkeypatch):
     }
     bootstrap.client.return_value.assume_role.assert_called_once_with(
         RoleArn="arn:aws:iam::111111111111:role/scanner",
-        RoleSessionName="cloudshield-readonly-scan",
+        RoleSessionName="aegisshield-readonly-scan",
         ExternalId="external-id-value",
     )
     assert isinstance(assumed.client.call_args.kwargs["config"], Config)
@@ -184,13 +191,30 @@ def test_s3_bucket_pagination_and_region_normalization():
         )
         stub.add_response("get_bucket_logging", {}, {"Bucket": "sample-bucket"})
         stub.add_response(
+            "get_public_access_block",
+            {
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": True,
+                    "IgnorePublicAcls": True,
+                    "BlockPublicPolicy": True,
+                    "RestrictPublicBuckets": True,
+                }
+            },
+            {"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
             "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
         )
         assets = provider._collect_s3()
         stub.assert_no_pending_responses()
     assert len(assets) == 1
     assert assets[0].region == "eu-west-1"
-    assert assets[0].attributes == {"public": True, "encrypted": True, "logging_enabled": False}
+    assert assets[0].attributes == {
+        "public": True,
+        "encrypted": True,
+        "logging_enabled": False,
+        "block_public_access": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -210,3 +234,84 @@ def test_s3_access_denied_is_not_treated_as_safe(operation, method):
         )
         with pytest.raises(ClientError):
             getattr(provider, method)(client, "sample-bucket")
+
+
+def test_optional_service_failure_becomes_coverage_gap():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+
+    def denied():
+        raise ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "denied"}},
+            "DescribeDBInstances",
+        )
+
+    assets = provider._safe_collect("rds", denied)
+    assert len(assets) == 1
+    assert assets[0].resource_type == "coverage_gap"
+    assert assets[0].attributes["reason"] == "AccessDenied"
+
+
+def test_ebs_unencrypted_volume_collected():
+    provider, client = provider_with_client("ec2")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "describe_volumes",
+            {
+                "Volumes": [
+                    {
+                        "VolumeId": "vol-1234567890abcdef0",
+                        "Size": 8,
+                        "SnapshotId": "",
+                        "AvailabilityZone": "eu-west-3a",
+                        "State": "available",
+                        "CreateTime": datetime.now(UTC),
+                        "VolumeType": "gp3",
+                        "Encrypted": False,
+                        "Iops": 3000,
+                    }
+                ]
+            },
+            {},
+        )
+        assets = provider._collect_ebs()
+    assert assets[0].resource_type == "ebs_volume"
+    assert assets[0].attributes["encrypted"] is False
+
+
+def test_guardduty_missing_detector_collected_as_disabled():
+    provider, client = provider_with_client("guardduty")
+    with Stubber(client) as stub:
+        stub.add_response("list_detectors", {"DetectorIds": []}, {})
+        assets = provider._collect_guardduty()
+    assert assets[0].resource_type == "guardduty_detector"
+    assert assets[0].attributes["enabled"] is False
+
+
+def test_cloudtrail_not_logging_collected():
+    provider, client = provider_with_client("cloudtrail")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "describe_trails",
+            {
+                "trailList": [
+                    {
+                        "Name": "org-trail",
+                        "S3BucketName": "logs",
+                        "TrailARN": "arn:aws:cloudtrail:eu-west-3:111111111111:trail/org-trail",
+                        "LogFileValidationEnabled": False,
+                        "IsMultiRegionTrail": False,
+                    }
+                ]
+            },
+            {"includeShadowTrails": False},
+        )
+        stub.add_response(
+            "get_trail_status",
+            {"IsLogging": False},
+            {"Name": "arn:aws:cloudtrail:eu-west-3:111111111111:trail/org-trail"},
+        )
+        assets = provider._collect_cloudtrail()
+    assert assets[0].attributes["logging"] is False
+    assert assets[0].attributes["multi_region"] is False
