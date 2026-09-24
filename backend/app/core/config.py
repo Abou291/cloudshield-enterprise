@@ -21,6 +21,13 @@ class AwsConnection(BaseModel):
     region: str = Field(default="eu-west-3", pattern=r"^[a-z]{2}-[a-z]+-[0-9]$")
     profile_name: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,128}$")
 
+    @field_validator("profile_name", mode="before")
+    @classmethod
+    def normalize_profile_name(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @model_validator(mode="after")
     def validate_account(self) -> "AwsConnection":
         if self.role_arn.split(":")[4] != self.account_id:
