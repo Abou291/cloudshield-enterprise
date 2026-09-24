@@ -124,8 +124,8 @@ def test_desktop_aws_connection(
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, str | None]:
+    return {"status": "ok", "instance": get_settings().instance_nonce}
 
 
 @router.get("/findings", response_model=list[Finding])
