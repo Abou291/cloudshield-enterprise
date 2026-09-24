@@ -108,6 +108,7 @@ def test_aws_source_separation_and_bound_connection(client, secured, monkeypatch
         "arn:aws:iam::111111111111:role/scanner",
         "test-external-id-alpha",
         "111111111111",
+        None,
     )
     assert client.get("/api/v1/findings", headers=h).json() == []
     assert client.post("/api/v1/scans/demo", headers=h).status_code == 201
