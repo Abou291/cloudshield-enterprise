@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     aws_role_arn: str | None = None
     desktop_mode: bool = False
     desktop_config_path: Path | None = None
+    instance_nonce: str | None = Field(default=None, min_length=16, max_length=128)
     ai_api_key: str | None = None
     ai_base_url: str = "https://api.openai.com/v1"
     ai_allowed_hosts: list[str] = ["api.openai.com"]
