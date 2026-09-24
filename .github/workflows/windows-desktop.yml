@@ -59,7 +59,19 @@ jobs:
             }
             if (-not $ready) { throw "Packaged backend did not become healthy" }
           } finally {
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+            if (-not $process.HasExited) {
+              taskkill /PID $process.Id /T /F | Out-Null
+            }
+            Get-Process "aegisshield-api" -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 1
+            try {
+              Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/health" | Out-Null
+              throw "Port 8765 is still occupied after packaged backend cleanup"
+            } catch {
+              if ($_.Exception.Message -eq "Port 8765 is still occupied after packaged backend cleanup") {
+                throw
+              }
+            }
           }
 
       - name: Install frontend dependencies
