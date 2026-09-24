@@ -9,6 +9,7 @@ def test_desktop_connection_persists_only_role_metadata(tmp_path):
         external_id="unique-external-id",
         account_id="123456789012",
         region="eu-west-3",
+        profile_name="company-sso",
     )
 
     store = DesktopConnectionStore(path)
@@ -18,6 +19,7 @@ def test_desktop_connection_persists_only_role_metadata(tmp_path):
     persisted = path.read_text(encoding="utf-8")
     assert "AccessKey" not in persisted
     assert "SecretAccessKey" not in persisted
+    assert "company-sso" in persisted
 
 
 def test_desktop_connection_missing_file_is_not_configured(tmp_path):
