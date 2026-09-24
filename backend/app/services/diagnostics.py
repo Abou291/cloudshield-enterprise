@@ -35,21 +35,34 @@ def classify_aws_error(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, ClientError):
         code = exc.response.get("Error", {}).get("Code", "AWS_CLIENT_ERROR")
         messages = {
-            "AccessDenied": "AWS denied the requested action. Review the AssumeRole trust policy and scanner permissions.",
-            "AccessDeniedException": "AWS denied the requested action. Review the scanner role permissions.",
-            "ExpiredToken": "The AWS session has expired. Sign in to IAM Identity Center/SSO again.",
-            "ExpiredTokenException": "The AWS session has expired. Sign in to IAM Identity Center/SSO again.",
-            "InvalidClientTokenId": "The local AWS session is invalid. Refresh the AWS CLI/SSO login.",
+            "AccessDenied": (
+                "AWS denied the requested action. Review the AssumeRole trust "
+                "policy and scanner permissions."
+            ),
+            "AccessDeniedException": (
+                "AWS denied the requested action. Review the scanner role permissions."
+            ),
+            "ExpiredToken": (
+                "The AWS session has expired. Sign in to IAM Identity Center/SSO again."
+            ),
+            "ExpiredTokenException": (
+                "The AWS session has expired. Sign in to IAM Identity Center/SSO again."
+            ),
+            "InvalidClientTokenId": (
+                "The local AWS session is invalid. Refresh the AWS CLI/SSO login."
+            ),
             "UnrecognizedClientException": "The local AWS session is invalid or expired.",
         }
         return code.upper(), messages.get(
             code,
-            "AWS rejected the request. Review the local profile, trust policy, Region and read-only permissions.",
+            "AWS rejected the request. Review the local profile, trust policy, "
+            "Region and read-only permissions.",
         )
     if isinstance(exc, BotoCoreError):
         return (
             "AWS_SDK_ERROR",
-            "The AWS SDK could not complete the request. Check network access, Region and local AWS configuration.",
+            "The AWS SDK could not complete the request. Check network access, "
+            "Region and local AWS configuration.",
         )
     if isinstance(exc, ValueError):
         return "AWS_ACCOUNT_MISMATCH", str(exc)
