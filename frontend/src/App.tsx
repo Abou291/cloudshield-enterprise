@@ -14,7 +14,13 @@ function SeverityBadge({ severity }: { severity: Severity }) {
 }
 
 function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
-  const [connection, setConnection] = useState<AwsConnectionInput>({ role_arn: "", external_id: "", account_id: "", region: "eu-west-3" });
+  const [connection, setConnection] = useState<AwsConnectionInput>({
+    role_arn: "",
+    external_id: "",
+    account_id: "",
+    region: "eu-west-3",
+    profile_name: "default",
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const update = (field: keyof AwsConnectionInput, value: string) => setConnection((current) => ({ ...current, [field]: value }));
@@ -36,6 +42,7 @@ function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
       <label>Role ARN<input required value={connection.role_arn} onChange={(event) => update("role_arn", event.target.value)} placeholder="arn:aws:iam::123456789012:role/aegisshield-readonly" /></label>
       <label>Account ID<input required pattern="[0-9]{12}" value={connection.account_id} onChange={(event) => update("account_id", event.target.value)} placeholder="123456789012" /></label>
       <label>External ID<input required minLength={16} value={connection.external_id} onChange={(event) => update("external_id", event.target.value)} placeholder="A unique value from the AWS trust policy" /></label>
+      <label>AWS profile<input value={connection.profile_name ?? ""} onChange={(event) => update("profile_name", event.target.value)} placeholder="default" /><small>Use the AWS CLI/SSO profile already configured on this PC.</small></label>
       <label>Default region<input required value={connection.region} onChange={(event) => update("region", event.target.value)} placeholder="eu-west-3" /></label>
       <div className="connection-actions"><button disabled={busy} type="submit">{busy ? "Validating…" : "Validate AWS role"}</button><button disabled={busy} type="button" onClick={() => void save()}>Save connection</button></div>
     </form>
