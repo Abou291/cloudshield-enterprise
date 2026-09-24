@@ -32,3 +32,14 @@ rules:
         operator: is_false
     remediation: Enable access logging to a dedicated protected log bucket.
 
+
+  - id: S3-004
+    name: S3 Block Public Access not fully enabled
+    description: One or more bucket-level Block Public Access protections are disabled.
+    resource_type: s3_bucket
+    severity: high
+    confidence: 0.95
+    conditions:
+      - path: block_public_access
+        operator: is_false
+    remediation: Enable all four S3 Block Public Access settings unless a documented public-access requirement exists.
