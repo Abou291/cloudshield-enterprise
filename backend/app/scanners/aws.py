@@ -1,15 +1,16 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import boto3
 from botocore.client import BaseClient
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.domain import Asset
 
 
 class AwsInventoryProvider:
-    """Read-only AWS collector for the deliberately narrow V1 surface."""
+    """Read-only AWS collector with fail-soft optional service coverage."""
 
     def __init__(
         self,
@@ -27,7 +28,10 @@ class AwsInventoryProvider:
         session = boto3.Session(profile_name=profile_name, region_name=region)
         if role_arn:
             sts = session.client("sts", config=self.client_config)
-            parameters = {"RoleArn": role_arn, "RoleSessionName": "cloudshield-readonly-scan"}
+            parameters = {
+                "RoleArn": role_arn,
+                "RoleSessionName": "aegisshield-readonly-scan",
+            }
             if external_id:
                 parameters["ExternalId"] = external_id
             credentials = sts.assume_role(**parameters)["Credentials"]
@@ -47,35 +51,94 @@ class AwsInventoryProvider:
         return self.session.client(service, config=self.client_config)
 
     def collect(self) -> list[Asset]:
-        return [*self._collect_iam(), *self._collect_s3(), *self._collect_security_groups()]
+        collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
+            ("iam", self._collect_iam),
+            ("s3", self._collect_s3),
+            ("ec2-security-groups", self._collect_security_groups),
+            ("ebs", self._collect_ebs),
+            ("rds", self._collect_rds),
+            ("cloudtrail", self._collect_cloudtrail),
+            ("guardduty", self._collect_guardduty),
+        ]
+        assets: list[Asset] = []
+        for service, collector in collectors:
+            assets.extend(self._safe_collect(service, collector))
+        return assets
+
+    def _safe_collect(
+        self,
+        service: str,
+        collector: Callable[[], list[Asset]],
+    ) -> list[Asset]:
+        try:
+            return collector()
+        except (ClientError, BotoCoreError) as exc:
+            reason = type(exc).__name__
+            if isinstance(exc, ClientError):
+                reason = exc.response.get("Error", {}).get("Code", "ClientError")
+            return [
+                Asset(
+                    resource_id=f"coverage:{service}",
+                    resource_type="coverage_gap",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name=service,
+                    attributes={"service": service, "reason": reason, "available": False},
+                )
+            ]
 
     def _collect_iam(self) -> list[Asset]:
         iam = self.client("iam")
-        assets: list[Asset] = []
+        summary = iam.get_account_summary().get("SummaryMap", {})
+        assets: list[Asset] = [
+            Asset(
+                resource_id=f"arn:aws:iam::{self.account_id}:root",
+                resource_type="iam_account",
+                account_id=self.account_id,
+                region="global",
+                name="root",
+                attributes={
+                    "root_mfa_enabled": bool(summary.get("AccountMFAEnabled", 0)),
+                    "root_access_keys_present": bool(
+                        summary.get("AccountAccessKeysPresent", 0)
+                    ),
+                },
+                context={"privileged": True},
+            )
+        ]
         for user in iam.get_paginator("list_users").paginate().search("Users[]"):
             username = user["UserName"]
             mfa_enabled = any(
                 page["MFADevices"]
-                for page in iam.get_paginator("list_mfa_devices").paginate(UserName=username)
+                for page in iam.get_paginator("list_mfa_devices").paginate(
+                    UserName=username
+                )
             )
             keys = [
                 key
-                for page in iam.get_paginator("list_access_keys").paginate(UserName=username)
+                for page in iam.get_paginator("list_access_keys").paginate(
+                    UserName=username
+                )
                 for key in page["AccessKeyMetadata"]
                 if key["Status"] == "Active"
             ]
             oldest_key_days = max(
-                ((datetime.now(UTC) - key["CreateDate"]).days for key in keys), default=0
+                (
+                    (datetime.now(UTC) - key["CreateDate"]).days
+                    for key in keys
+                ),
+                default=0,
             )
             attached = [
                 policy
-                for page in iam.get_paginator("list_attached_user_policies").paginate(
-                    UserName=username
-                )
+                for page in iam.get_paginator(
+                    "list_attached_user_policies"
+                ).paginate(UserName=username)
                 for policy in page["AttachedPolicies"]
             ]
             administrator = any(
-                policy["PolicyArn"].endswith("/AdministratorAccess") for policy in attached
+                policy["PolicyArn"].endswith("/AdministratorAccess")
+                for policy in attached
             )
             assets.append(
                 Asset(
@@ -118,6 +181,9 @@ class AwsInventoryProvider:
                         "public": public,
                         "encrypted": encrypted,
                         "logging_enabled": logging,
+                        "block_public_access": self._bucket_public_access_block(
+                            s3, name
+                        ),
                     },
                     context={"internet_exposed": public},
                 )
@@ -133,13 +199,20 @@ class AwsInventoryProvider:
                     from_port = permission.get("FromPort")
                     to_port = permission.get("ToPort")
                     protocol = permission.get("IpProtocol")
-                    cidrs = [item["CidrIp"] for item in permission.get("IpRanges", [])]
-                    cidrs += [item["CidrIpv6"] for item in permission.get("Ipv6Ranges", [])]
+                    cidrs = [
+                        item["CidrIp"]
+                        for item in permission.get("IpRanges", [])
+                    ]
+                    cidrs += [
+                        item["CidrIpv6"]
+                        for item in permission.get("Ipv6Ranges", [])
+                    ]
                     for cidr in cidrs:
                         assets.append(
                             Asset(
                                 resource_id=(
-                                    f"{group['GroupId']}:{protocol}:{from_port}:{to_port}:{cidr}"
+                                    f"{group['GroupId']}:{protocol}:"
+                                    f"{from_port}:{to_port}:{cidr}"
                                 ),
                                 resource_type="security_group_rule",
                                 account_id=self.account_id,
@@ -151,9 +224,147 @@ class AwsInventoryProvider:
                                     "protocol": protocol,
                                     "source_cidr": cidr,
                                 },
-                                context={"internet_exposed": cidr in {"0.0.0.0/0", "::/0"}},
+                                context={
+                                    "internet_exposed": cidr
+                                    in {"0.0.0.0/0", "::/0"}
+                                },
                             )
                         )
+        return assets
+
+    def _collect_ebs(self) -> list[Asset]:
+        ec2 = self.client("ec2")
+        assets: list[Asset] = []
+        for page in ec2.get_paginator("describe_volumes").paginate():
+            for volume in page.get("Volumes", []):
+                assets.append(
+                    Asset(
+                        resource_id=volume["VolumeId"],
+                        resource_type="ebs_volume",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=volume["VolumeId"],
+                        attributes={
+                            "encrypted": bool(volume.get("Encrypted", False)),
+                            "state": volume.get("State", "unknown"),
+                        },
+                    )
+                )
+        return assets
+
+    def _collect_rds(self) -> list[Asset]:
+        rds = self.client("rds")
+        assets: list[Asset] = []
+        for page in rds.get_paginator("describe_db_instances").paginate():
+            for database in page.get("DBInstances", []):
+                arn = database.get("DBInstanceArn") or database["DBInstanceIdentifier"]
+                public = bool(database.get("PubliclyAccessible", False))
+                assets.append(
+                    Asset(
+                        resource_id=arn,
+                        resource_type="rds_instance",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=database["DBInstanceIdentifier"],
+                        attributes={
+                            "publicly_accessible": public,
+                            "storage_encrypted": bool(
+                                database.get("StorageEncrypted", False)
+                            ),
+                            "deletion_protection": bool(
+                                database.get("DeletionProtection", False)
+                            ),
+                            "multi_az": bool(database.get("MultiAZ", False)),
+                        },
+                        context={"internet_exposed": public},
+                    )
+                )
+        return assets
+
+    def _collect_cloudtrail(self) -> list[Asset]:
+        cloudtrail = self.client("cloudtrail")
+        assets: list[Asset] = []
+        trails = cloudtrail.describe_trails(includeShadowTrails=False).get(
+            "trailList", []
+        )
+        if not trails:
+            return [
+                Asset(
+                    resource_id=f"cloudtrail:none:{self.region}",
+                    resource_type="cloudtrail",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name="No CloudTrail trail",
+                    attributes={
+                        "logging": False,
+                        "multi_region": False,
+                        "log_file_validation": False,
+                    },
+                )
+            ]
+        for trail in trails:
+            identifier = trail.get("TrailARN") or trail["Name"]
+            status = cloudtrail.get_trail_status(Name=identifier)
+            assets.append(
+                Asset(
+                    resource_id=identifier,
+                    resource_type="cloudtrail",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name=trail["Name"],
+                    attributes={
+                        "logging": bool(status.get("IsLogging", False)),
+                        "multi_region": bool(
+                            trail.get("IsMultiRegionTrail", False)
+                        ),
+                        "log_file_validation": bool(
+                            trail.get("LogFileValidationEnabled", False)
+                        ),
+                    },
+                )
+            )
+        return assets
+
+    def _collect_guardduty(self) -> list[Asset]:
+        guardduty = self.client("guardduty")
+        detector_ids: list[str] = []
+        token: str | None = None
+        while True:
+            kwargs = {"NextToken": token} if token else {}
+            response = guardduty.list_detectors(**kwargs)
+            detector_ids.extend(response.get("DetectorIds", []))
+            token = response.get("NextToken")
+            if not token:
+                break
+        if not detector_ids:
+            return [
+                Asset(
+                    resource_id=f"guardduty:none:{self.region}",
+                    resource_type="guardduty_detector",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name="GuardDuty",
+                    attributes={"enabled": False},
+                )
+            ]
+        assets: list[Asset] = []
+        for detector_id in detector_ids:
+            detector = guardduty.get_detector(DetectorId=detector_id)
+            assets.append(
+                Asset(
+                    resource_id=f"guardduty:{detector_id}",
+                    resource_type="guardduty_detector",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name=detector_id,
+                    attributes={
+                        "enabled": detector.get("Status") == "ENABLED",
+                        "publishing_frequency": detector.get(
+                            "FindingPublishingFrequency"
+                        ),
+                    },
+                )
+            )
         return assets
 
     @staticmethod
@@ -180,6 +391,29 @@ class AwsInventoryProvider:
             raise
 
     @staticmethod
+    def _bucket_public_access_block(s3: BaseClient, name: str) -> bool:
+        try:
+            configuration = s3.get_public_access_block(
+                Bucket=name
+            ).get("PublicAccessBlockConfiguration", {})
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {
+                "NoSuchPublicAccessBlockConfiguration",
+                "NoSuchPublicAccessBlock",
+            }:
+                return False
+            raise
+        required = {
+            "BlockPublicAcls",
+            "IgnorePublicAcls",
+            "BlockPublicPolicy",
+            "RestrictPublicBuckets",
+        }
+        return all(bool(configuration.get(key, False)) for key in required)
+
+    @staticmethod
     def _bucket_region(s3: BaseClient, name: str) -> str:
-        location = s3.get_bucket_location(Bucket=name).get("LocationConstraint")
+        location = s3.get_bucket_location(Bucket=name).get(
+            "LocationConstraint"
+        )
         return "eu-west-1" if location == "EU" else location or "us-east-1"

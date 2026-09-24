@@ -78,3 +78,50 @@ export interface AuditEvent {
 
 export interface AssistantResponse { answer: string; model: string; findings_used: number; }
 export interface AssistantMessage { role: "user" | "assistant"; content: string; model?: string; }
+
+export interface Diagnostics {
+  version: string;
+  backend: string;
+  database: string;
+  database_engine: string;
+  desktop: boolean;
+  data_directory: string | null;
+  backup_count: number;
+  tenant_id: string;
+  aws_configured: boolean;
+}
+
+export interface AwsDiagnostics {
+  status: "ok" | "error";
+  code: string;
+  message: string;
+  account_id: string;
+  region: string;
+  profile_name: string | null;
+}
+
+export interface BackupInfo {
+  file_name: string;
+  path: string;
+  size_bytes: number;
+  sha256: string;
+}
+
+export interface SecurityReport {
+  schema: string;
+  integrity_sha256: string;
+  generated_at: string;
+  tenant_id: string;
+  source: string;
+  summary: {
+    findings: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    highest_risk: number | null;
+    latest_scan_status: string | null;
+    latest_scan_started_at: string | null;
+  };
+  findings: Finding[];
+}

@@ -10,12 +10,19 @@ from app.core.auth import Identity, Operator
 from app.core.config import AwsConnection, get_settings
 from app.core.domain import AuditEvent, Finding, ScanHistory, ScanResult, Severity
 from app.db.models import AuditRecord, ScanRecord
-from app.db.session import get_db
+from app.db.session import engine, get_db
 from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
 from app.services.assistant import ask_llm
+from app.services.backup import DesktopBackupService
 from app.services.desktop_connection import DesktopConnectionStore
+from app.services.diagnostics import (
+    aws_diagnostics,
+    base_diagnostics,
+    classify_aws_error,
+)
 from app.services.findings import FindingRepository
+from app.services.reporting import build_security_report
 from app.services.scans import ScanBusyError, ScanFailedError, ScanService
 
 router = APIRouter(prefix="/api/v1")
@@ -52,6 +59,10 @@ class AssistantResponse(BaseModel):
     answer: str
     model: str
     findings_used: int
+
+
+class RestoreBackupRequest(BaseModel):
+    confirmation: str
 
 
 @router.post("/assistant", response_model=AssistantResponse)
@@ -130,15 +141,83 @@ def test_desktop_aws_connection(
             payload.profile_name,
         )
     except Exception as exc:
-        raise HTTPException(
-            422, "AWS role validation failed. Check AWS SSO/profile and trust policy."
-        ) from exc
+        code, message = classify_aws_error(exc)
+        raise HTTPException(422, f"{code}: {message}") from exc
     return DesktopAwsConnectionView(
         role_arn=payload.role_arn,
         account_id=payload.account_id,
         region=payload.region,
         profile_name=payload.profile_name,
     )
+
+
+@router.get("/diagnostics")
+def diagnostics(db: DatabaseSession, principal: Identity) -> dict:
+    settings = get_settings()
+    result = base_diagnostics(db, settings)
+    result["tenant_id"] = principal.tenant_id
+    result["aws_configured"] = (
+        principal.tenant_id in settings.aws_connections
+        or (settings.desktop_mode and local_connection() is not None)
+    )
+    return result
+
+
+@router.post("/diagnostics/aws")
+def diagnostics_aws(principal: Operator) -> dict:
+    settings = get_settings()
+    connection = settings.aws_connections.get(principal.tenant_id) or local_connection()
+    if connection is None:
+        raise HTTPException(404, "No AWS connection is configured")
+    return aws_diagnostics(connection)
+
+
+def desktop_backup_service() -> DesktopBackupService:
+    settings = get_settings()
+    if not settings.desktop_mode or settings.desktop_config_path is None:
+        raise HTTPException(404, "Desktop backup is unavailable")
+    return DesktopBackupService(
+        settings.database_url,
+        settings.desktop_config_path.parent / "backups",
+    )
+
+
+@router.post("/backups")
+def create_backup(principal: Operator) -> dict:
+    try:
+        return desktop_backup_service().create()
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/backups/restore-latest")
+def restore_latest_backup(payload: RestoreBackupRequest, principal: Operator) -> dict:
+    if payload.confirmation != "RESTORE":
+        raise HTTPException(422, "Explicit RESTORE confirmation is required")
+    service = desktop_backup_service()
+    engine.dispose()
+    try:
+        return service.restore_latest()
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/reports/security")
+def security_report(
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> dict:
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    scans = list(
+        db.scalars(
+            select(ScanRecord)
+            .where(ScanRecord.tenant_id == principal.tenant_id)
+            .order_by(ScanRecord.started_at.desc(), ScanRecord.scan_id)
+            .limit(100)
+        )
+    )
+    return build_security_report(principal.tenant_id, source, findings, scans)
 
 
 @router.get("/health")
@@ -235,16 +314,21 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
             403,
             "AWS scanning requires an authenticated, configured organization",
         )
+    try:
+        provider = AwsInventoryProvider(
+            connection.region,
+            connection.role_arn,
+            connection.external_id,
+            connection.account_id,
+            connection.profile_name,
+        )
+    except Exception as exc:
+        code, message = classify_aws_error(exc)
+        raise HTTPException(422, f"{code}: {message}") from exc
     return execute_scan(
         ScanService(
             db,
-            lambda: AwsInventoryProvider(
-                connection.region,
-                connection.role_arn,
-                connection.external_id,
-                connection.account_id,
-                connection.profile_name,
-            ),
+            lambda: provider,
             "aws",
             principal,
         )

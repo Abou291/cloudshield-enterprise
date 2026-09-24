@@ -1,4 +1,4 @@
-import type { AssistantResponse, AuditEvent, AwsConnectionInput, AwsConnectionView, Finding, ScanHistory, ScanResult, Session } from "./types";
+import type { AssistantResponse, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, Finding, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 // Intentionally memory-only: reload/logout forgets the token.
@@ -39,3 +39,14 @@ export const saveAwsConnection = (connection: AwsConnectionInput) => request<Aws
 );
 
 export const askAssistant = (question: string, source: string) => request<AssistantResponse>("/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, source }) });
+
+export const getDiagnostics = () => request<Diagnostics>("/diagnostics");
+export const runAwsDiagnostics = () => request<AwsDiagnostics>("/diagnostics/aws", { method: "POST" });
+export const createBackup = () => request<BackupInfo>("/backups", { method: "POST" });
+export const restoreLatestBackup = () => request<BackupInfo>("/backups/restore-latest", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ confirmation: "RESTORE" }),
+});
+export const getSecurityReport = (source: string) =>
+  request<SecurityReport>(`/reports/security?source=${encodeURIComponent(source)}`);

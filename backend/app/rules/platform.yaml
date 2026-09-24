@@ -1,0 +1,121 @@
+rules:
+  - id: IAM-004
+    name: Root account MFA disabled
+    description: The AWS root account is not protected by multi-factor authentication.
+    resource_type: iam_account
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: root_mfa_enabled
+        operator: is_false
+    remediation: Enable MFA on the root user, store the recovery method securely, and avoid daily root use.
+
+  - id: IAM-005
+    name: Root account access key present
+    description: A long-lived access key exists for the AWS root account.
+    resource_type: iam_account
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: root_access_keys_present
+        operator: is_true
+    remediation: Remove root access keys and use IAM roles or IAM Identity Center with short-lived credentials.
+
+  - id: EBS-001
+    name: EBS volume is not encrypted
+    description: An EBS volume does not use encryption at rest.
+    resource_type: ebs_volume
+    severity: high
+    confidence: 0.95
+    conditions:
+      - path: encrypted
+        operator: is_false
+    remediation: Migrate the volume through an encrypted snapshot and enable EBS encryption by default.
+
+  - id: RDS-001
+    name: RDS instance is publicly accessible
+    description: The RDS instance is marked publicly accessible.
+    resource_type: rds_instance
+    severity: critical
+    confidence: 0.97
+    conditions:
+      - path: publicly_accessible
+        operator: is_true
+    remediation: Move the database behind private networking and restrict access through security groups and controlled application paths.
+
+  - id: RDS-002
+    name: RDS storage encryption disabled
+    description: The RDS instance storage is not encrypted at rest.
+    resource_type: rds_instance
+    severity: high
+    confidence: 0.95
+    conditions:
+      - path: storage_encrypted
+        operator: is_false
+    remediation: Migrate to an encrypted RDS instance and manage KMS key access according to least privilege.
+
+  - id: RDS-003
+    name: RDS deletion protection disabled
+    description: The RDS instance does not have deletion protection enabled.
+    resource_type: rds_instance
+    severity: low
+    confidence: 0.90
+    conditions:
+      - path: deletion_protection
+        operator: is_false
+    remediation: Enable deletion protection for persistent or production databases and validate backup retention.
+
+  - id: CT-001
+    name: CloudTrail logging disabled
+    description: A CloudTrail trail exists but is not currently logging, or no trail was detected in the selected Region.
+    resource_type: cloudtrail
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: logging
+        operator: is_false
+    remediation: Enable CloudTrail logging and deliver logs to a protected S3 bucket with monitoring.
+
+  - id: CT-002
+    name: CloudTrail is not multi-Region
+    description: The CloudTrail trail does not cover all Regions.
+    resource_type: cloudtrail
+    severity: medium
+    confidence: 0.90
+    conditions:
+      - path: multi_region
+        operator: is_false
+    remediation: Configure an organization or multi-Region trail unless a documented architecture requires otherwise.
+
+  - id: CT-003
+    name: CloudTrail log file validation disabled
+    description: CloudTrail log file integrity validation is disabled.
+    resource_type: cloudtrail
+    severity: low
+    confidence: 0.90
+    conditions:
+      - path: log_file_validation
+        operator: is_false
+    remediation: Enable CloudTrail log file validation to strengthen log integrity assurance.
+
+  - id: GD-001
+    name: GuardDuty detector disabled
+    description: Amazon GuardDuty is not enabled in the selected Region.
+    resource_type: guardduty_detector
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: Enable GuardDuty for the account and Region, preferably through AWS Organizations for centralized coverage.
+
+  - id: COV-001
+    name: Scanner coverage gap
+    description: AegisShield could not inspect an AWS service because the API was unavailable or the scanner role lacked permission.
+    resource_type: coverage_gap
+    severity: medium
+    confidence: 0.99
+    conditions:
+      - path: available
+        operator: is_false
+    remediation: Review the service and reason in the evidence, then grant only the missing read-only permission or document the unsupported service.

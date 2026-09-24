@@ -38,6 +38,7 @@ Resources:
               - Sid: IdentityInventory
                 Effect: Allow
                 Action:
+                  - iam:GetAccountSummary
                   - iam:ListUsers
                   - iam:ListMFADevices
                   - iam:ListAccessKeys
@@ -51,11 +52,26 @@ Resources:
                   - s3:GetEncryptionConfiguration
                   - s3:GetBucketLogging
                   - s3:GetBucketLocation
+                  - s3:GetBucketPublicAccessBlock
                 Resource: "*"
               - Sid: NetworkInventory
                 Effect: Allow
                 Action:
                   - ec2:DescribeSecurityGroups
+                  - ec2:DescribeVolumes
+                Resource: "*"
+              - Sid: DatabaseInventory
+                Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                Resource: "*"
+              - Sid: AuditAndDetectionInventory
+                Effect: Allow
+                Action:
+                  - cloudtrail:DescribeTrails
+                  - cloudtrail:GetTrailStatus
+                  - guardduty:ListDetectors
+                  - guardduty:GetDetector
                 Resource: "*"
 
 Outputs:

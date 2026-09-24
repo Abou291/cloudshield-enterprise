@@ -3,6 +3,7 @@ import { Activity, Cloud, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-r
 
 import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection } from "./api";
 import AccessGate from "./AccessGate";
+import DiagnosticsPanel from "./DiagnosticsPanel";
 import SecurityCopilot from "./SecurityCopilot";
 import type { AuditEvent, AwsConnectionInput, Finding, ScanHistory, Session, Severity } from "./types";
 import "./styles.css";
@@ -56,7 +57,9 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [source, setSource] = useState(session.demo ? "demo-fixture" : "aws");
+  const [source, setSource] = useState(
+    session.demo || !session.aws_enabled ? "demo-fixture" : "aws",
+  );
   const [scans, setScans] = useState<ScanHistory[]>([]);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [offset, setOffset] = useState(0);
@@ -119,6 +122,7 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
           <a href="#findings"><TriangleAlert size={18} /> Findings</a>
           <a href="#scans"><Cloud size={18} /> Scan history</a>
           <a href="#audit">Audit trail</a>
+          <a href="#diagnostics">Diagnostics</a>
         </nav>
         <div className="scope">
           <span className="status-dot" /> {session.tenant_id}
@@ -236,6 +240,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
             </tr>)}</tbody>
           </table></div>
         </section>
+
+        <DiagnosticsPanel session={session} source={source} />
       </main>
 
       <SecurityCopilot findings={findings} />

@@ -34,9 +34,13 @@ Open Connect AWS account and enter the Role ARN, 12-digit AWS Account ID, the sa
 
 ## Current real-AWS coverage
 
-The scanner currently inspects IAM users, MFA state, active access-key age and attached AdministratorAccess; S3 bucket public-policy status, encryption and access logging; and EC2 security-group IPv4/IPv6 exposure.
+AegisShield 0.4 inspects IAM root/user posture, S3 public access/encryption/logging, EC2 security-group exposure, EBS encryption, RDS exposure/encryption/deletion protection, CloudTrail logging/integrity coverage and GuardDuty detector state.
 
-This is intentionally narrower than a mature CSPM. A successful scan does not prove that the AWS account is secure or compliant.
+Optional AWS service failures are fail-soft: a missing read-only permission or unavailable API becomes a coverage-gap finding instead of silently appearing safe or aborting every other collector.
+
+Use **Diagnostics & recovery** to validate the local backend/database and the configured AWS profile/STS role. The same area can create an integrity-checked local SQLite backup, restore the latest backup after explicit confirmation, and export a machine-readable security report with a SHA-256 integrity checksum.
+
+This remains narrower than a mature CSPM. A successful scan does not prove that the AWS account is secure or compliant.
 
 ## Pilot exit criteria
 
