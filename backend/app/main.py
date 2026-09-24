@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.router import router
 from app.core.config import get_settings
