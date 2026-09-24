@@ -76,6 +76,31 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run package:win
 
+      - name: Smoke-test packaged desktop shell
+        shell: pwsh
+        run: |
+          $desktopExe = "./desktop/dist/win-unpacked/AegisShield.exe"
+          if (-not (Test-Path $desktopExe)) { throw "Packaged desktop executable is missing" }
+          $desktop = Start-Process -FilePath $desktopExe -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 40; $i++) {
+              Start-Sleep -Milliseconds 500
+              if ($desktop.HasExited) { throw "Packaged desktop exited before becoming ready" }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/health"
+                if ($health.status -eq "ok" -and $health.instance) {
+                  $ready = $true
+                  break
+                }
+              } catch {}
+            }
+            if (-not $ready) { throw "Packaged desktop did not start its secured local backend" }
+          } finally {
+            if (-not $desktop.HasExited) { Stop-Process -Id $desktop.Id -Force }
+            Get-Process "aegisshield-api" -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+
       - name: Verify desktop renderer and installer output
         shell: pwsh
         run: |
