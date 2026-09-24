@@ -3,6 +3,7 @@ import { Activity, Cloud, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-r
 
 import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection } from "./api";
 import AccessGate from "./AccessGate";
+import SecurityCopilot from "./SecurityCopilot";
 import type { AuditEvent, AwsConnectionInput, Finding, ScanHistory, Session, Severity } from "./types";
 import "./styles.css";
 
@@ -13,7 +14,13 @@ function SeverityBadge({ severity }: { severity: Severity }) {
 }
 
 function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
-  const [connection, setConnection] = useState<AwsConnectionInput>({ role_arn: "", external_id: "", account_id: "", region: "eu-west-3" });
+  const [connection, setConnection] = useState<AwsConnectionInput>({
+    role_arn: "",
+    external_id: "",
+    account_id: "",
+    region: "eu-west-3",
+    profile_name: "default",
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const update = (field: keyof AwsConnectionInput, value: string) => setConnection((current) => ({ ...current, [field]: value }));
@@ -35,6 +42,7 @@ function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
       <label>Role ARN<input required value={connection.role_arn} onChange={(event) => update("role_arn", event.target.value)} placeholder="arn:aws:iam::123456789012:role/aegisshield-readonly" /></label>
       <label>Account ID<input required pattern="[0-9]{12}" value={connection.account_id} onChange={(event) => update("account_id", event.target.value)} placeholder="123456789012" /></label>
       <label>External ID<input required minLength={16} value={connection.external_id} onChange={(event) => update("external_id", event.target.value)} placeholder="A unique value from the AWS trust policy" /></label>
+      <label>AWS profile<input value={connection.profile_name ?? ""} onChange={(event) => update("profile_name", event.target.value)} placeholder="default" /><small>Use the AWS CLI/SSO profile already configured on this PC.</small></label>
       <label>Default region<input required value={connection.region} onChange={(event) => update("region", event.target.value)} placeholder="eu-west-3" /></label>
       <div className="connection-actions"><button disabled={busy} type="submit">{busy ? "Validating…" : "Validate AWS role"}</button><button disabled={busy} type="button" onClick={() => void save()}>Save connection</button></div>
     </form>
@@ -115,7 +123,7 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
         <div className="scope">
           <span className="status-dot" /> {session.tenant_id}
           <small>{session.demo ? "Local demonstration" : `${session.subject} · ${session.role}`}</small>
-          {!session.demo && <button className="link" onClick={logout}>Sign out</button>}
+          {!session.demo && !session.desktop && <button className="link" onClick={logout}>Sign out</button>}
         </div>
       </aside>
 
@@ -229,6 +237,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
           </table></div>
         </section>
       </main>
+
+      <SecurityCopilot findings={findings} />
 
       {selected && (
         <div className="overlay" role="presentation" onClick={() => setSelected(null)}>

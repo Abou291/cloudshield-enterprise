@@ -38,6 +38,7 @@ export interface Session {
   subject: string;
   role: "viewer" | "operator";
   demo: boolean;
+  desktop: boolean;
   aws_enabled: boolean;
 }
 
@@ -46,12 +47,14 @@ export interface AwsConnectionInput {
   external_id: string;
   account_id: string;
   region: string;
+  profile_name?: string | null;
 }
 
 export interface AwsConnectionView {
   role_arn: string;
   account_id: string;
   region: string;
+  profile_name?: string | null;
 }
 
 export interface ScanHistory {
@@ -72,3 +75,6 @@ export interface AuditEvent {
   object_id: string;
   timestamp: string;
 }
+
+export interface AssistantResponse { answer: string; model: string; findings_used: number; }
+export interface AssistantMessage { role: "user" | "assistant"; content: string; model?: string; }

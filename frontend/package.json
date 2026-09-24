@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:desktop": "tsc -b && vite build --mode desktop",
+    "build:desktop": "tsc -b && vite build --mode desktop --base ./",
     "lint": "eslint .",
     "test": "vitest"
   },

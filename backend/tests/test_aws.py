@@ -139,14 +139,20 @@ def test_identity_binding_and_external_id(monkeypatch):
         }
     }
     assumed.client.return_value.get_caller_identity.return_value = {"Account": "222222222222"}
-    monkeypatch.setattr("app.scanners.aws.boto3.Session", Mock(side_effect=[bootstrap, assumed]))
+    session_factory = Mock(side_effect=[bootstrap, assumed])
+    monkeypatch.setattr("app.scanners.aws.boto3.Session", session_factory)
     with pytest.raises(ValueError, match="does not match"):
         AwsInventoryProvider(
             "eu-west-3",
             "arn:aws:iam::111111111111:role/scanner",
             "external-id-value",
             "111111111111",
+            "corp-sso",
         )
+    assert session_factory.call_args_list[0].kwargs == {
+        "profile_name": "corp-sso",
+        "region_name": "eu-west-3",
+    }
     bootstrap.client.return_value.assume_role.assert_called_once_with(
         RoleArn="arn:aws:iam::111111111111:role/scanner",
         RoleSessionName="cloudshield-readonly-scan",

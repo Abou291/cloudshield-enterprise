@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AegisShield read-only scanner role for a customer AWS account.
+
+Parameters:
+  TrustedPrincipalArn:
+    Type: String
+    Description: IAM principal allowed to bootstrap AegisShield AssumeRole.
+  ExternalId:
+    Type: String
+    MinLength: 16
+    NoEcho: true
+    Description: Unique ExternalId configured in AegisShield.
+  RoleName:
+    Type: String
+    Default: aegisshield-readonly
+
+Resources:
+  AegisShieldReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref TrustedPrincipalArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      Policies:
+        - PolicyName: AegisShieldInventoryReadOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: IdentityInventory
+                Effect: Allow
+                Action:
+                  - iam:ListUsers
+                  - iam:ListMFADevices
+                  - iam:ListAccessKeys
+                  - iam:ListAttachedUserPolicies
+                Resource: "*"
+              - Sid: StorageInventory
+                Effect: Allow
+                Action:
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketPolicyStatus
+                  - s3:GetEncryptionConfiguration
+                  - s3:GetBucketLogging
+                  - s3:GetBucketLocation
+                Resource: "*"
+              - Sid: NetworkInventory
+                Effect: Allow
+                Action:
+                  - ec2:DescribeSecurityGroups
+                Resource: "*"
+
+Outputs:
+  RoleArn:
+    Description: Paste this Role ARN into AegisShield.
+    Value: !GetAtt AegisShieldReadOnlyRole.Arn

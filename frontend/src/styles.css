@@ -50,3 +50,38 @@ header button:disabled { opacity: .65; }
 .overlay { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .6); display: flex; justify-content: flex-end; }.drawer { width: min(520px, 100%); height: 100%; overflow-y: auto; background: #0a1915; border-left: 1px solid #24473b; padding: 40px 34px; box-shadow: -30px 0 80px #0008; }.drawer h2 { font-size: 26px; }.drawer h3 { margin-top: 28px; }.drawer p, .drawer li { color: #90a79f; line-height: 1.55; }.drawer pre { padding: 16px; white-space: pre-wrap; color: #94e4c5; background: #06100d; border-radius: 8px; }.close { float: right; font-size: 28px; color: #8ca39b; }
 @media (max-width: 1050px) { .score-grid { grid-template-columns: repeat(2, 1fr); }.score-card { grid-column: span 2; } }
 @media (max-width: 720px) { .shell { display: block; }.sidebar { position: static; width: 100%; height: auto; padding: 18px; }.sidebar nav { display: none; }.scope { display: none; }main { padding: 26px 16px; }header { align-items: flex-start; gap: 18px; }header button { white-space: nowrap; }.score-grid { grid-template-columns: 1fr 1fr; }.resource { max-width: 150px; } }
+
+
+/* Product-grade workspace refresh */
+.shell { grid-template-columns: 264px 1fr; background: #080b10; }
+.sidebar { padding: 26px 18px; background: #0b0f14; border-right-color: #202630; }
+.brand { color: #f2f5f7; letter-spacing: -.02em; }
+.edition, .eyebrow { color: #6f7a87; }
+nav a { color: #8d98a5; border: 1px solid transparent; }
+nav a.active, nav a:hover { background: #141a21; border-color: #242c36; color: #f6f8fa; }
+.scope { border-color: #252d37; background: #0e1319; }
+main { max-width: 1600px; padding-top: 34px; }
+header { border-bottom: 1px solid #202630; padding-bottom: 24px; }
+header button { background: #f1f5f4; color: #0b1110; border-radius: 7px; }
+.score-card, .metric, .panel { background: #0e1319; border-color: #252d37; border-radius: 9px; box-shadow: none; }
+.panel-title, th, td { border-color: #202832; }
+.toolbar button, .access-panel button, select { background: #121820; border-color: #2a3440; color: #dce3e8; }
+.score-ring { background: radial-gradient(circle closest-side, #0e1319 78%, transparent 80% 100%), conic-gradient(#72d6ae calc(var(--score) * 1%), #242d36 0); }
+
+.copilot-launcher { position: fixed; right: 28px; bottom: 26px; z-index: 20; display: flex; gap: 8px; align-items: center; padding: 11px 16px; border: 1px solid #34404d; border-radius: 8px; background: #f2f5f4; color: #0a1110; font-weight: 750; box-shadow: 0 12px 40px #0008; }
+.copilot { position: fixed; z-index: 30; right: 24px; bottom: 24px; width: min(440px, calc(100vw - 32px)); height: min(680px, calc(100vh - 48px)); display: grid; grid-template-rows: auto 1fr auto auto; background: #0b0f14; border: 1px solid #2b3540; border-radius: 12px; box-shadow: 0 24px 90px #000b; overflow: hidden; }
+.copilot-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 17px; border-bottom: 1px solid #242c35; }
+.copilot-head > div { display: flex; align-items: center; gap: 10px; }
+.copilot-head small { display: block; color: #76828e; margin-top: 2px; font-size: 11px; }
+.copilot-head button { border: 0; background: transparent; color: #8995a0; }
+.copilot-messages { overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.message { max-width: 88%; padding: 10px 12px; border-radius: 9px; border: 1px solid #27313b; background: #111820; }
+.message.user { align-self: flex-end; background: #1b2b26; border-color: #2e4a41; }
+.message p { white-space: pre-wrap; line-height: 1.5; margin: 0; font-size: 13px; color: #dbe3e7; }
+.message small { display: block; margin-top: 7px; color: #64717d; font-size: 10px; }
+.thinking { color: #8e9aa5 !important; }
+.suggestions { display: flex; gap: 7px; overflow-x: auto; padding: 0 14px 12px; }
+.suggestions button { white-space: nowrap; padding: 7px 9px; border-radius: 6px; border: 1px solid #29343e; background: #10161c; color: #9da9b3; font-size: 11px; }
+.copilot-input { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; border-top: 1px solid #242c35; background: #0d1217; }
+.copilot-input textarea { resize: none; min-height: 52px; max-height: 120px; padding: 10px 11px; border-radius: 7px; border: 1px solid #303b46; background: #080c10; color: #edf2f4; font: inherit; }
+.copilot-input button { align-self: end; width: 38px; height: 38px; display: grid; place-content: center; border: 0; border-radius: 7px; background: #e9efed; color: #08100d; }

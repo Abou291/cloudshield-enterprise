@@ -4,7 +4,14 @@ import { afterEach, beforeEach, vi } from "vitest";
 import App from "./App";
 import { setApiToken } from "./api";
 
-const session = { tenant_id: "demo", subject: "local-demo", role: "operator", demo: true, aws_enabled: false };
+const session = {
+  tenant_id: "demo",
+  subject: "local-demo",
+  role: "operator",
+  demo: true,
+  desktop: false,
+  aws_enabled: false,
+};
 const response = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body });
 const fetchMock = vi.fn();
 
@@ -17,7 +24,7 @@ afterEach(() => { cleanup(); setApiToken(""); });
 
 test("renders the empty dashboard", async () => {
   render(<App />);
-  expect(screen.getByText("CloudShield")).toBeInTheDocument();
+  expect(screen.getByText("AegisShield")).toBeInTheDocument();
   expect(await screen.findByText("No findings loaded")).toBeInTheDocument();
   expect(screen.getByText("No data")).toBeInTheDocument();
   expect(screen.queryByText("Security score")).not.toBeInTheDocument();

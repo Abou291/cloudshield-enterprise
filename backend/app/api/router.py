@@ -13,6 +13,7 @@ from app.db.models import AuditRecord, ScanRecord
 from app.db.session import get_db
 from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
+from app.services.assistant import ask_llm
 from app.services.desktop_connection import DesktopConnectionStore
 from app.services.findings import FindingRepository
 from app.services.scans import ScanBusyError, ScanFailedError, ScanService
@@ -30,6 +31,7 @@ def session(principal: Identity) -> dict:
     desktop_connection = DesktopConnectionStore(settings.desktop_config_path).get()
     return {
         **principal.model_dump(),
+        "desktop": settings.desktop_mode,
         "aws_enabled": (
             principal.tenant_id in settings.aws_connections
             or (settings.desktop_mode and desktop_connection is not None)
@@ -41,10 +43,39 @@ class DesktopAwsConnectionInput(AwsConnection):
     pass
 
 
+class AssistantRequest(BaseModel):
+    question: str
+    source: Literal["demo-fixture", "aws"] = "demo-fixture"
+
+
+class AssistantResponse(BaseModel):
+    answer: str
+    model: str
+    findings_used: int
+
+
+@router.post("/assistant", response_model=AssistantResponse)
+def assistant(
+    payload: AssistantRequest,
+    db: DatabaseSession,
+    principal: Identity,
+) -> AssistantResponse:
+    question = payload.question.strip()
+    if not question or len(question) > 2000:
+        raise HTTPException(422, "Question must contain between 1 and 2000 characters")
+    findings = FindingRepository(db, principal.tenant_id, payload.source).list(None, 30, 0)
+    try:
+        answer, model = ask_llm(get_settings(), question, findings)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Security copilot provider is temporarily unavailable") from exc
+    return AssistantResponse(answer=answer, model=model, findings_used=len(findings))
+
+
 class DesktopAwsConnectionView(BaseModel):
     role_arn: str
     account_id: str
     region: str
+    profile_name: str | None = None
 
 
 def local_connection() -> AwsConnection | None:
@@ -60,7 +91,10 @@ def get_desktop_aws_connection(principal: Operator) -> DesktopAwsConnectionView:
     if connection is None:
         raise HTTPException(404, "No desktop AWS connection configured")
     return DesktopAwsConnectionView(
-        role_arn=connection.role_arn, account_id=connection.account_id, region=connection.region
+        role_arn=connection.role_arn,
+        account_id=connection.account_id,
+        region=connection.region,
+        profile_name=connection.profile_name,
     )
 
 
@@ -73,7 +107,10 @@ def save_desktop_aws_connection(
         raise HTTPException(404, "AWS desktop configuration is unavailable")
     DesktopConnectionStore(settings.desktop_config_path).save(payload)
     return DesktopAwsConnectionView(
-        role_arn=payload.role_arn, account_id=payload.account_id, region=payload.region
+        role_arn=payload.role_arn,
+        account_id=payload.account_id,
+        region=payload.region,
+        profile_name=payload.profile_name,
     )
 
 
@@ -86,20 +123,27 @@ def test_desktop_aws_connection(
         raise HTTPException(404, "AWS desktop configuration is unavailable")
     try:
         AwsInventoryProvider(
-            payload.region, payload.role_arn, payload.external_id, payload.account_id
+            payload.region,
+            payload.role_arn,
+            payload.external_id,
+            payload.account_id,
+            payload.profile_name,
         )
     except Exception as exc:
         raise HTTPException(
             422, "AWS role validation failed. Check AWS SSO/profile and trust policy."
         ) from exc
     return DesktopAwsConnectionView(
-        role_arn=payload.role_arn, account_id=payload.account_id, region=payload.region
+        role_arn=payload.role_arn,
+        account_id=payload.account_id,
+        region=payload.region,
+        profile_name=payload.profile_name,
     )
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, str | None]:
+    return {"status": "ok", "instance": get_settings().instance_nonce}
 
 
 @router.get("/findings", response_model=list[Finding])
@@ -187,7 +231,10 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
     settings = get_settings()
     connection = settings.aws_connections.get(principal.tenant_id) or local_connection()
     if connection is None or (principal.demo and not settings.desktop_mode):
-        raise HTTPException(403, "AWS scanning requires an authenticated, configured organization")
+        raise HTTPException(
+            403,
+            "AWS scanning requires an authenticated, configured organization",
+        )
     return execute_scan(
         ScanService(
             db,
@@ -196,6 +243,7 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
                 connection.role_arn,
                 connection.external_id,
                 connection.account_id,
+                connection.profile_name,
             ),
             "aws",
             principal,
