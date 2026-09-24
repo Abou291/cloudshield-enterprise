@@ -10,7 +10,7 @@ The desktop application binds its API to 127.0.0.1 only, generates a fresh rando
 
 ## Prepare an AWS bootstrap identity
 
-Use AWS CLI v2 with short-lived credentials, preferably IAM Identity Center (SSO). Verify the active identity with: aws sts get-caller-identity
+Use AWS CLI v2 with short-lived credentials, preferably IAM Identity Center (SSO). Verify the profile with: aws sts get-caller-identity --profile YOUR_PROFILE
 
 AegisShield uses the standard AWS credential chain on the PC and then calls STS AssumeRole. Do not create an IAM access key specifically for AegisShield.
 
@@ -30,7 +30,7 @@ Deploy with AWS CloudFormation using stack name aegisshield-readonly, the templa
 
 ## Connect from the application
 
-Open Connect AWS account and enter the Role ARN, 12-digit AWS Account ID, the same External ID and the default AWS region. Choose Validate AWS role first. Validation performs STS AssumeRole and verifies that the resulting caller identity belongs to the configured account. Then save the connection and run an AWS scan.
+Open Connect AWS account and enter the Role ARN, 12-digit AWS Account ID, the same External ID, the local AWS profile name (for example default or company-sso), and the default AWS region. Choose Validate AWS role first. Validation performs STS AssumeRole and verifies that the resulting caller identity belongs to the configured account. Then save the connection and run an AWS scan.
 
 ## Current real-AWS coverage
 
