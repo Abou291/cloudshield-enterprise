@@ -19,6 +19,7 @@ class AwsConnection(BaseModel):
     external_id: str = Field(min_length=16, max_length=1224)
     account_id: str = Field(pattern=r"^[0-9]{12}$")
     region: str = Field(default="eu-west-3", pattern=r"^[a-z]{2}-[a-z]+-[0-9]$")
+    profile_name: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,128}$")
 
     @model_validator(mode="after")
     def validate_account(self) -> "AwsConnection":
