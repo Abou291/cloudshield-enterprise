@@ -109,7 +109,9 @@ jobs:
             }
             if (-not $ready) { throw "Packaged desktop did not start its secured local backend" }
           } finally {
-            if (-not $desktop.HasExited) { Stop-Process -Id $desktop.Id -Force }
+            if (-not $desktop.HasExited) {
+              taskkill /PID $desktop.Id /T /F | Out-Null
+            }
             Get-Process "aegisshield-api" -ErrorAction SilentlyContinue | Stop-Process -Force
           }
 
@@ -126,6 +128,38 @@ jobs:
           $installer = Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe"
           if (-not $installer) { throw "Windows installer was not produced" }
           $installer | ForEach-Object { Write-Host $_.FullName $_.Length }
+
+      - name: Smoke-test NSIS installation
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe" | Select-Object -First 1
+          $installDir = Join-Path $env:RUNNER_TEMP "AegisShieldInstalled"
+          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installDir" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "NSIS installer returned exit code $($install.ExitCode)" }
+          $installedExe = Join-Path $installDir "AegisShield.exe"
+          if (-not (Test-Path $installedExe)) { throw "AegisShield.exe was not installed" }
+          $desktop = Start-Process -FilePath $installedExe -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 40; $i++) {
+              Start-Sleep -Milliseconds 500
+              if ($desktop.HasExited) { throw "Installed desktop exited before becoming ready" }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/health"
+                if ($health.status -eq "ok" -and $health.instance) {
+                  $ready = $true
+                  break
+                }
+              } catch {}
+            }
+            if (-not $ready) { throw "Installed AegisShield did not start its secured local backend" }
+          } finally {
+            if (-not $desktop.HasExited) {
+              taskkill /PID $desktop.Id /T /F | Out-Null
+            }
+            Get-Process "aegisshield-api" -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
