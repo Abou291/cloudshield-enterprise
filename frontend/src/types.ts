@@ -38,6 +38,7 @@ export interface Session {
   subject: string;
   role: "viewer" | "operator";
   demo: boolean;
+  desktop: boolean;
   aws_enabled: boolean;
 }
 
