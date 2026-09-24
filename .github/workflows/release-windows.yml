@@ -13,6 +13,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
@@ -20,17 +22,28 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Require version match and signing certificate
+      - name: Verify trusted release source
         shell: pwsh
         env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          GH_TOKEN: \${{ github.token }}
+          CSC_LINK: \${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: \${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
-          $expected = "${{ github.ref_name }}".TrimStart("v")
-          $actual = (Get-Content "./desktop/package.json" -Raw | ConvertFrom-Json).version
-          if ($actual -ne $expected) {
-            throw "Tag version $expected does not match desktop package version $actual"
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw "Release tag must point to a commit already contained in main" }
+
+          $expected = "\${{ github.ref_name }}".TrimStart("v")
+          $desktop = (Get-Content "./desktop/package.json" -Raw | ConvertFrom-Json).version
+          $frontend = (Get-Content "./frontend/package.json" -Raw | ConvertFrom-Json).version
+          $backend = (Select-String -Path "./backend/pyproject.toml" -Pattern '^version = "([^"]+)"$').Matches[0].Groups[1].Value
+          if ($desktop -ne $expected -or $frontend -ne $expected -or $backend -ne $expected) {
+            throw "Tag/version mismatch: tag=$expected desktop=$desktop frontend=$frontend backend=$backend"
           }
+
+          $gate = gh api "repos/\${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=\${{ github.sha }}&status=success&per_page=1" --jq ".total_count"
+          if ([int]$gate -lt 1) { throw "Exact release commit has no successful Security Gate run" }
+
           if ([string]::IsNullOrWhiteSpace($env:CSC_LINK) -or [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
             throw "Signed releases require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD secrets"
           }
@@ -57,23 +70,21 @@ jobs:
       - name: Build signed Windows installer
         working-directory: desktop
         env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          CSC_LINK: \${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: \${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
           npm install --no-audit --no-fund
           npm run package:win
 
-      - name: Verify Authenticode and checksums
+      - name: Verify Authenticode
         shell: pwsh
         run: |
           $installer = Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe" | Select-Object -First 1
           if (-not $installer) { throw "Signed installer was not produced" }
           $signature = Get-AuthenticodeSignature $installer.FullName
-          if ($signature.Status -ne "Valid") {
-            throw "Installer Authenticode signature is not valid: $($signature.Status)"
+          if ($signature.Status -ne "Valid" -or -not $signature.SignerCertificate) {
+            throw "Installer Authenticode signature is not valid"
           }
-          $hash = Get-FileHash $installer.FullName -Algorithm SHA256
-          "$($hash.Hash.ToLower())  $($installer.Name)" | Set-Content "./desktop/dist/SHA256SUMS.txt"
 
       - name: Generate release SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
@@ -83,8 +94,27 @@ jobs:
           output-file: desktop/dist/aegisshield-sbom.cdx.json
           upload-artifact: false
 
+      - name: Generate manifest and checksums
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe" | Select-Object -First 1
+          $sbom = Get-Item "./desktop/dist/aegisshield-sbom.cdx.json"
+          $manifest = [ordered]@{
+            schema = "aegisshield.release-manifest.v1"
+            version = "\${{ github.ref_name }}".TrimStart("v")
+            git_sha = "\${{ github.sha }}"
+            generated_at = [DateTime]::UtcNow.ToString("o")
+            installer = [ordered]@{ file = $installer.Name; sha256 = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower() }
+            sbom = [ordered]@{ file = $sbom.Name; sha256 = (Get-FileHash $sbom.FullName -Algorithm SHA256).Hash.ToLower() }
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content "./desktop/dist/release-manifest.json" -Encoding utf8
+          Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe", "./desktop/dist/*.blockmap", "./desktop/dist/aegisshield-sbom.cdx.json", "./desktop/dist/release-manifest.json" | ForEach-Object {
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLower())  $($_.Name)"
+          } | Set-Content "./desktop/dist/SHA256SUMS.txt" -Encoding ascii
+
       - name: Publish GitHub release
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "./desktop/dist/AegisShield-Setup-*.exe" "./desktop/dist/*.blockmap" "./desktop/dist/SHA256SUMS.txt" "./desktop/dist/aegisshield-sbom.cdx.json" --verify-tag --title "AegisShield ${{ github.ref_name }}" --notes "Signed Windows release. See repository SECURITY.md and release checklist before customer deployment."
+          GH_TOKEN: \${{ github.token }}
+        run: gh release create "\${{ github.ref_name }}" "./desktop/dist/AegisShield-Setup-*.exe" "./desktop/dist/*.blockmap" "./desktop/dist/SHA256SUMS.txt" "./desktop/dist/aegisshield-sbom.cdx.json" "./desktop/dist/release-manifest.json" --verify-tag --title "AegisShield \${{ github.ref_name }}" --notes "Signed Windows release built from a Security-Gate-approved main commit."
