@@ -179,6 +179,7 @@ def test_pagination_is_stable_and_validated(client):
         {"env": "production"},
         {"demo_mode": False, "api_keys": []},
         {"cors_origins": ["*"]},
+        {"trusted_hosts": ["*"]},
         {"env": "prod"},
     ],
 )
@@ -219,3 +220,12 @@ def test_recovery_rolls_back_if_record_is_already_terminal(client):
         with pytest.raises(ValueError, match="No matching running scan"):
             recover_scan(db, "demo", result["scan_id"])
         assert db.get(ScanLock, "demo") is not None
+
+
+def test_request_body_size_is_limited(client):
+    response = client.post(
+        "/api/v1/assistant",
+        content=b"x" * 1_048_577,
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
