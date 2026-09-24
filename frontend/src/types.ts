@@ -109,6 +109,7 @@ export interface BackupInfo {
 
 export interface SecurityReport {
   schema: string;
+  integrity_sha256: string;
   generated_at: string;
   tenant_id: string;
   source: string;
