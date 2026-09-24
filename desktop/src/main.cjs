@@ -6,6 +6,7 @@ const path = require("node:path");
 
 let backend;
 let apiToken;
+let instanceNonce;
 const PORT = 8765;
 const API_PATTERN = `http://127.0.0.1:${PORT}/api/v1/*`;
 
@@ -14,7 +15,7 @@ function backendPath() {
     process.platform === "win32" ? "aegisshield-api.exe" : "aegisshield-api";
   return app.isPackaged
     ? path.join(process.resourcesPath, "backend", executable)
-    : path.join(__dirname, "../../../backend/dist", executable);
+    : path.join(__dirname, "../../backend/dist", executable);
 }
 
 function startBackend() {
@@ -22,6 +23,7 @@ function startBackend() {
   fs.mkdirSync(dataDir, { recursive: true });
 
   apiToken = crypto.randomBytes(32).toString("base64url");
+  instanceNonce = crypto.randomBytes(24).toString("base64url");
   const tokenHash = crypto.createHash("sha256").update(apiToken).digest("hex");
   const principal = [
     {
@@ -37,6 +39,7 @@ function startBackend() {
     AEGISSHIELD_PORT: String(PORT),
     CLOUDSHIELD_ENV: "production",
     CLOUDSHIELD_DESKTOP_MODE: "true",
+    CLOUDSHIELD_INSTANCE_NONCE: instanceNonce,
     CLOUDSHIELD_DESKTOP_CONFIG_PATH: path.join(
       dataDir,
       "aws-connection.json",
@@ -79,7 +82,10 @@ function configureSession() {
 async function waitForBackend(remaining = 30) {
   try {
     const response = await fetch(`http://127.0.0.1:${PORT}/api/v1/health`);
-    if (response.ok) return;
+    if (response.ok) {
+      const health = await response.json();
+      if (health.status === "ok" && health.instance === instanceNonce) return;
+    }
   } catch (_) {
     // The child process is still starting.
   }
@@ -114,7 +120,7 @@ function createWindow() {
 
   const uiDirectory = app.isPackaged
     ? path.join(process.resourcesPath, "ui")
-    : path.join(__dirname, "../../../frontend/dist");
+    : path.join(__dirname, "../../frontend/dist");
   window.loadFile(path.join(uiDirectory, "index.html"));
   window.once("ready-to-show", () => window.show());
 }
@@ -141,5 +147,6 @@ app.on("window-all-closed", () => {
 });
 app.on("before-quit", () => {
   apiToken = undefined;
+  instanceNonce = undefined;
   if (backend && !backend.killed) backend.kill();
 });
