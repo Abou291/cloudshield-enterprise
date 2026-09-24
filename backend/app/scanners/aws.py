@@ -17,13 +17,14 @@ class AwsInventoryProvider:
         role_arn: str | None = None,
         external_id: str | None = None,
         expected_account_id: str | None = None,
+        profile_name: str | None = None,
     ) -> None:
         self.client_config = Config(
             connect_timeout=5,
             read_timeout=15,
             retries={"mode": "standard", "total_max_attempts": 3},
         )
-        session = boto3.Session(region_name=region)
+        session = boto3.Session(profile_name=profile_name, region_name=region)
         if role_arn:
             sts = session.client("sts", config=self.client_config)
             parameters = {"RoleArn": role_arn, "RoleSessionName": "cloudshield-readonly-scan"}
