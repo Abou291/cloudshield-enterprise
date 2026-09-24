@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     ai_allowed_hosts: list[str] = ["api.openai.com"]
     ai_model: str = "gpt-4.1-mini"
     rate_limit_per_minute: int = Field(default=120, ge=10, le=10000)
+    max_request_body_bytes: int = Field(default=1_048_576, ge=16_384, le=10_485_760)
+    trusted_hosts: list[str] = ["127.0.0.1", "localhost"]
 
     @model_validator(mode="after")
     def validate_security(self) -> "Settings":
@@ -93,7 +95,7 @@ class Settings(BaseSettings):
 
         return self
 
-    @field_validator("cors_origins", "ai_allowed_hosts", mode="before")
+    @field_validator("cors_origins", "ai_allowed_hosts", "trusted_hosts", mode="before")
     @classmethod
     def split_string_lists(cls, value: object) -> object:
         if isinstance(value, str) and not value.startswith("["):
