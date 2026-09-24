@@ -116,7 +116,7 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
         <div className="scope">
           <span className="status-dot" /> {session.tenant_id}
           <small>{session.demo ? "Local demonstration" : `${session.subject} · ${session.role}`}</small>
-          {!session.demo && <button className="link" onClick={logout}>Sign out</button>}
+          {!session.demo && !session.desktop && <button className="link" onClick={logout}>Sign out</button>}
         </div>
       </aside>
 
