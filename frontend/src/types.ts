@@ -54,6 +54,7 @@ export interface AwsConnectionView {
   role_arn: string;
   account_id: string;
   region: string;
+  profile_name?: string | null;
 }
 
 export interface ScanHistory {
