@@ -48,6 +48,10 @@ jobs:
               try {
                 $response = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/health"
                 if ($response.status -eq "ok") {
+                  $scan = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8765/api/v1/scans/demo"
+                  if ($scan.assets_scanned -ne 4 -or $scan.findings_count -ne 7) {
+                    throw "Packaged backend demo scan returned unexpected results"
+                  }
                   $ready = $true
                   break
                 }
@@ -72,9 +76,16 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run package:win
 
-      - name: Verify installer output
+      - name: Verify desktop renderer and installer output
         shell: pwsh
         run: |
+          $html = Get-Content "./frontend/dist/index.html" -Raw
+          if ($html -match 'src="/assets/' -or $html -match 'href="/assets/') {
+            throw "Desktop renderer contains absolute Vite asset paths"
+          }
+          if ($html -notmatch './assets/') {
+            throw "Desktop renderer does not contain relative asset paths"
+          }
           $installer = Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe"
           if (-not $installer) { throw "Windows installer was not produced" }
           $installer | ForEach-Object { Write-Host $_.FullName $_.Length }
