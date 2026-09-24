@@ -13,9 +13,9 @@ from app.db.models import AuditRecord, ScanRecord
 from app.db.session import get_db
 from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
+from app.services.assistant import ask_llm
 from app.services.desktop_connection import DesktopConnectionStore
 from app.services.findings import FindingRepository
-from app.services.assistant import ask_llm
 from app.services.scans import ScanBusyError, ScanFailedError, ScanService
 
 router = APIRouter(prefix="/api/v1")
@@ -55,7 +55,11 @@ class AssistantResponse(BaseModel):
 
 
 @router.post("/assistant", response_model=AssistantResponse)
-def assistant(payload: AssistantRequest, db: DatabaseSession, principal: Identity) -> AssistantResponse:
+def assistant(
+    payload: AssistantRequest,
+    db: DatabaseSession,
+    principal: Identity,
+) -> AssistantResponse:
     question = payload.question.strip()
     if not question or len(question) > 2000:
         raise HTTPException(422, "Question must contain between 1 and 2000 characters")
@@ -213,7 +217,10 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
     settings = get_settings()
     connection = settings.aws_connections.get(principal.tenant_id) or local_connection()
     if connection is None or (principal.demo and not settings.desktop_mode):
-        raise HTTPException(403, "AWS scanning requires an authenticated, configured organization")
+        raise HTTPException(
+            403,
+            "AWS scanning requires an authenticated, configured organization",
+        )
     return execute_scan(
         ScanService(
             db,
