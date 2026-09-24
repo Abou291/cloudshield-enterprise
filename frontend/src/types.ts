@@ -47,6 +47,7 @@ export interface AwsConnectionInput {
   external_id: string;
   account_id: string;
   region: string;
+  profile_name?: string | null;
 }
 
 export interface AwsConnectionView {
