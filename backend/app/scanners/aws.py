@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Callable
 
 import boto3
 from botocore.client import BaseClient
