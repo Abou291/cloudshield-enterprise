@@ -21,7 +21,7 @@ export default function AccessGate({ children }: {
   const logout = () => { setApiToken(""); setSession(null); setToken(""); setError(""); };
   if (session) return children(session, logout);
   return <main className="access-panel">
-    <h1>CloudShield</h1>
+    <h1>AegisShield</h1>
     <p>Connect to your organization with an API token supplied by your administrator.</p>
     <form onSubmit={async (event) => {
       event.preventDefault(); setBusy(true); setError(""); setApiToken(token.trim());
