@@ -77,6 +77,8 @@ class Settings(BaseSettings):
             raise ValueError("Each API key hash must be unique")
         if "*" in self.cors_origins:
             raise ValueError("Explicit CORS origins are required")
+        if "*" in self.trusted_hosts:
+            raise ValueError("Wildcard trusted hosts are not allowed")
 
         parsed = urlparse(self.ai_base_url)
         hostname = (parsed.hostname or "").lower()
