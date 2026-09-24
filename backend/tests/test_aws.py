@@ -191,6 +191,9 @@ def test_s3_bucket_pagination_and_region_normalization():
         )
         stub.add_response("get_bucket_logging", {}, {"Bucket": "sample-bucket"})
         stub.add_response(
+            "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
+        )
+        stub.add_response(
             "get_public_access_block",
             {
                 "PublicAccessBlockConfiguration": {
@@ -201,9 +204,6 @@ def test_s3_bucket_pagination_and_region_normalization():
                 }
             },
             {"Bucket": "sample-bucket"},
-        )
-        stub.add_response(
-            "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
         )
         assets = provider._collect_s3()
         stub.assert_no_pending_responses()
