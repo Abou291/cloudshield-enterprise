@@ -1,6 +1,8 @@
 name: Windows Desktop Build
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -125,7 +127,11 @@ jobs:
           }
           $installer = Get-ChildItem "./desktop/dist/AegisShield-Setup-*.exe"
           if (-not $installer) { throw "Windows installer was not produced" }
-          $installer | ForEach-Object { Write-Host $_.FullName $_.Length }
+          $installer | ForEach-Object {
+            Write-Host $_.FullName $_.Length
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLower())  $($_.Name)" | Set-Content "./desktop/dist/SHA256SUMS.txt"
+          }
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -134,5 +140,6 @@ jobs:
           path: |
             desktop/dist/AegisShield-Setup-*.exe
             desktop/dist/*.blockmap
+            desktop/dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
