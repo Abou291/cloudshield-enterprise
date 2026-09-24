@@ -4,7 +4,7 @@ AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discov
 
 ## Windows desktop pilot
 
-The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.3.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
+The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.4.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
 
 The desktop backend binds to `127.0.0.1` only. Electron generates a fresh random bearer token and instance nonce at each launch; the token is injected into local API requests and is not persisted in the renderer. Production API docs are disabled in the packaged application.
 
@@ -26,6 +26,8 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - Windows Electron wrapper with sandboxing, navigation restrictions and CSP.
 - GitHub Actions gates for backend SQLite/PostgreSQL tests, frontend lint/test/build, secret scanning, SAST, IaC scanning, dependency audit, Trivy and CycloneDX SBOM generation.
 - Windows workflow that builds, smoke-tests and uploads the installer plus SHA-256 checksum.
+- Desktop diagnostics, AWS validation, SQLite backup/restore and machine-readable security-report export with integrity checksum.
+- Certificate-gated tagged release workflow: public Windows releases fail closed unless an Authenticode signing certificate is configured.
 - Least-privilege AWS CloudFormation role template for pilot onboarding.
 
 ## Windows + AWS pilot flow
@@ -44,8 +46,13 @@ No long-lived AWS access key needs to be stored by AegisShield.
 The scanner currently checks:
 
 - IAM users: MFA state, active access-key age and attached `AdministratorAccess`.
-- S3 buckets: public-policy status, server-side encryption and access logging.
-- EC2 security groups: IPv4/IPv6 public exposure and sensitive port ranges.
+- IAM: root MFA/root access-key posture, user MFA, access-key age and direct AdministratorAccess.
+- S3: public-policy status, Block Public Access, server-side encryption and access logging.
+- EC2: security-group IPv4/IPv6 exposure and EBS volume encryption.
+- RDS: public accessibility, storage encryption and deletion protection.
+- CloudTrail: logging state, multi-Region configuration and log-file validation.
+- GuardDuty: detector enabled/disabled state.
+- Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
 This coverage is intentionally narrower than a mature enterprise CSPM. A successful scan does not prove that an AWS account is secure or compliant.
 
