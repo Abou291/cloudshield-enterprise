@@ -75,6 +75,7 @@ class DesktopAwsConnectionView(BaseModel):
     role_arn: str
     account_id: str
     region: str
+    profile_name: str | None = None
 
 
 def local_connection() -> AwsConnection | None:
@@ -90,7 +91,10 @@ def get_desktop_aws_connection(principal: Operator) -> DesktopAwsConnectionView:
     if connection is None:
         raise HTTPException(404, "No desktop AWS connection configured")
     return DesktopAwsConnectionView(
-        role_arn=connection.role_arn, account_id=connection.account_id, region=connection.region
+        role_arn=connection.role_arn,
+        account_id=connection.account_id,
+        region=connection.region,
+        profile_name=connection.profile_name,
     )
 
 
@@ -103,7 +107,10 @@ def save_desktop_aws_connection(
         raise HTTPException(404, "AWS desktop configuration is unavailable")
     DesktopConnectionStore(settings.desktop_config_path).save(payload)
     return DesktopAwsConnectionView(
-        role_arn=payload.role_arn, account_id=payload.account_id, region=payload.region
+        role_arn=payload.role_arn,
+        account_id=payload.account_id,
+        region=payload.region,
+        profile_name=payload.profile_name,
     )
 
 
@@ -116,14 +123,21 @@ def test_desktop_aws_connection(
         raise HTTPException(404, "AWS desktop configuration is unavailable")
     try:
         AwsInventoryProvider(
-            payload.region, payload.role_arn, payload.external_id, payload.account_id
+            payload.region,
+            payload.role_arn,
+            payload.external_id,
+            payload.account_id,
+            payload.profile_name,
         )
     except Exception as exc:
         raise HTTPException(
             422, "AWS role validation failed. Check AWS SSO/profile and trust policy."
         ) from exc
     return DesktopAwsConnectionView(
-        role_arn=payload.role_arn, account_id=payload.account_id, region=payload.region
+        role_arn=payload.role_arn,
+        account_id=payload.account_id,
+        region=payload.region,
+        profile_name=payload.profile_name,
     )
 
 
@@ -229,6 +243,7 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
                 connection.role_arn,
                 connection.external_id,
                 connection.account_id,
+                connection.profile_name,
             ),
             "aws",
             principal,
