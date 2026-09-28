@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Cloud, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 
-import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection } from "./api";
+import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection, updateFindingStatus } from "./api";
 import AccessGate from "./AccessGate";
 import DiagnosticsPanel from "./DiagnosticsPanel";
 import SecurityCopilot from "./SecurityCopilot";
@@ -79,10 +79,12 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
   const [revision, setRevision] = useState(0);
   const [fetching, setFetching] = useState(true);
   const [showConnection, setShowConnection] = useState(false);
+  const [showResolved, setShowResolved] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([listFindings(source, offset), listScans(), listAudit()])
+    Promise.all([listFindings(source, offset, showResolved), listScans(), listAudit()])
       .then(([items, history, events]) => {
         if (active) {
           setFindings(items); setScans(history); setAudit(events); setError(null);
@@ -95,7 +97,7 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
     return () => {
       active = false;
     };
-  }, [source, offset, revision, logout]);
+  }, [source, offset, revision, logout, showResolved]);
 
   const scan = async () => {
     setLoading(true);
@@ -108,6 +110,22 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
       setLoading(false);
       setFetching(true);
       setRevision((value) => value + 1);
+    }
+  };
+
+  const changeFindingStatus = async (status: Finding["status"]) => {
+    if (!selected) return;
+    setStatusBusy(true);
+    setError(null);
+    try {
+      const updated = await updateFindingStatus(selected.fingerprint, source, status);
+      setSelected(updated);
+      setFetching(true);
+      setRevision((value) => value + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update finding status");
+    } finally {
+      setStatusBusy(false);
     }
   };
 
@@ -170,6 +188,12 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
           <button disabled={loading || fetching} onClick={() => {
             setFetching(true); setRevision((value) => value + 1);
           }}>Refresh</button>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={showResolved} onChange={(event) => {
+              setShowResolved(event.target.checked); setOffset(0); setFetching(true);
+            }} />
+            <span>Show resolved</span>
+          </label>
         </div>
         {source === "demo-fixture" && <p className="notice">Synthetic data — not an assessment of your AWS environment.</p>}
         {!session.demo && source === "aws" && !session.aws_enabled &&
@@ -212,7 +236,7 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
                   {findings.map((finding) => (
                     <tr key={finding.fingerprint}>
                       <td><SeverityBadge severity={finding.severity} /></td>
-                      <td><strong>{finding.title}</strong><small>{finding.rule_id} · {finding.region}</small></td>
+                      <td><strong>{finding.title}</strong><small>{finding.rule_id} · {finding.region} · {finding.status}</small></td>
                       <td className="resource">{finding.resource_id}</td>
                       <td><span className="risk">{finding.risk.score}</span></td>
                       <td><button className="link" onClick={() => setSelected(finding)}>Investigate</button></td>
@@ -266,6 +290,21 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
             <SeverityBadge severity={selected.severity} />
             <h2>{selected.title}</h2>
             <p>{selected.description}</p>
+            <p className="notice">Lifecycle status: {selected.status}</p>
+            {session.role === "operator" && <div className="connection-actions">
+              {selected.status !== "acknowledged" &&
+                <button disabled={statusBusy} onClick={() => void changeFindingStatus("acknowledged")}>
+                  Acknowledge
+                </button>}
+              {selected.status !== "resolved" &&
+                <button disabled={statusBusy} onClick={() => void changeFindingStatus("resolved")}>
+                  Resolve
+                </button>}
+              {selected.status === "resolved" &&
+                <button disabled={statusBusy} onClick={() => void changeFindingStatus("open")}>
+                  Reopen
+                </button>}
+            </div>}
             <h3>Risk {selected.risk.score}/100</h3>
             <ul>{selected.risk.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
             <h3>Evidence</h3>
