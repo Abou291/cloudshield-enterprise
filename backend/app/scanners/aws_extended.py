@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from botocore.client import BaseClient
+from botocore.exceptions import ClientError
 
 from app.core.domain import Asset
 
@@ -328,3 +329,82 @@ class AwsExtendedCollectorsMixin:
                     )
                 )
         return assets
+
+
+    def _collect_inspector2(self) -> list[Asset]:
+        inspector = self.client("inspector2")
+        response = inspector.batch_get_account_status(accountIds=[self.account_id])
+        accounts = response.get("accounts", [])
+        account = accounts[0] if accounts else {}
+        status = str(account.get("status", "DISABLED")).upper()
+        resource_state = account.get("resourceState", {})
+        enabled_resources = sorted(
+            key
+            for key, value in resource_state.items()
+            if isinstance(value, dict)
+            and str(value.get("status", "")).upper() == "ENABLED"
+        )
+        return [
+            Asset(
+                resource_id=f"inspector2:{self.account_id}:{self.region}",
+                resource_type="inspector_account",
+                account_id=self.account_id,
+                region=self.region,
+                name="Amazon Inspector",
+                attributes={
+                    "enabled": status == "ENABLED",
+                    "status": status,
+                    "enabled_resource_types": enabled_resources,
+                },
+            )
+        ]
+
+    def _collect_macie(self) -> list[Asset]:
+        macie = self.client("macie2")
+        try:
+            session = macie.get_macie_session()
+            status = str(session.get("status", "DISABLED")).upper()
+            frequency = session.get("findingPublishingFrequency")
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
+                raise
+            status = "DISABLED"
+            frequency = None
+        return [
+            Asset(
+                resource_id=f"macie:{self.account_id}:{self.region}",
+                resource_type="macie_account",
+                account_id=self.account_id,
+                region=self.region,
+                name="Amazon Macie",
+                attributes={
+                    "enabled": status == "ENABLED",
+                    "status": status,
+                    "finding_publishing_frequency": frequency,
+                },
+            )
+        ]
+
+    def _collect_backup(self) -> list[Asset]:
+        backup = self.client("backup")
+        plans: list[dict] = []
+        for page in backup.get_paginator("list_backup_plans").paginate(
+            IncludeDeleted=False
+        ):
+            plans.extend(page.get("BackupPlansList", []))
+        return [
+            Asset(
+                resource_id=f"aws-backup:{self.account_id}:{self.region}",
+                resource_type="backup_account",
+                account_id=self.account_id,
+                region=self.region,
+                name="AWS Backup",
+                attributes={
+                    "active_plan_count": len(plans),
+                    "has_active_plan": bool(plans),
+                    "plan_names": sorted(
+                        str(plan.get("BackupPlanName", "unnamed")) for plan in plans
+                    ),
+                },
+            )
+        ]
