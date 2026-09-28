@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
-from app.db.models import Base
+from app.db.migrations import migrate_database
 
 settings = get_settings()
 is_sqlite = settings.database_url.startswith("sqlite")
@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
+    migrate_database(engine)
 
 
 def get_db() -> Generator[Session, None, None]:
