@@ -471,3 +471,53 @@ def test_public_lambda_function_url_collected():
     assets = provider._collect_lambda_function_urls()
     assert assets[0].resource_type == "lambda_function_url"
     assert assets[0].attributes["public_without_auth"] is True
+
+
+def test_enabled_region_discovery_is_sorted_and_deduplicated():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.region = "eu-west-3"
+    client = Mock()
+    client.describe_regions.return_value = {
+        "Regions": [
+            {"RegionName": "us-east-1"},
+            {"RegionName": "eu-west-3"},
+            {"RegionName": "us-east-1"},
+        ]
+    }
+    provider.client = Mock(return_value=client)
+    assert provider._enabled_regions() == ["eu-west-3", "us-east-1"]
+    client.describe_regions.assert_called_once_with(AllRegions=False)
+
+
+def test_multi_region_collect_runs_global_once_and_regional_per_region():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    provider.scan_all_regions = True
+    provider._enabled_regions = Mock(return_value=["eu-west-3", "us-east-1"])
+    provider._collect_iam = Mock(return_value=[])
+    provider._collect_iam_password_policy = Mock(return_value=[])
+    provider._collect_s3 = Mock(return_value=[])
+    regional_names = [
+        "_collect_security_groups",
+        "_collect_ebs",
+        "_collect_ebs_default_encryption",
+        "_collect_vpc_flow_logs",
+        "_collect_rds",
+        "_collect_cloudtrail",
+        "_collect_guardduty",
+        "_collect_securityhub",
+        "_collect_config",
+        "_collect_kms",
+        "_collect_lambda_function_urls",
+    ]
+    for name in regional_names:
+        setattr(provider, name, Mock(return_value=[]))
+
+    assert provider.collect() == []
+    provider._collect_iam.assert_called_once()
+    provider._collect_iam_password_policy.assert_called_once()
+    provider._collect_s3.assert_called_once()
+    for name in regional_names:
+        assert getattr(provider, name).call_count == 2
+    assert provider.region == "eu-west-3"
