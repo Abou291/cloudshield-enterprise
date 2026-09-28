@@ -181,6 +181,22 @@ def test_s3_bucket_pagination_and_region_normalization():
             {"Bucket": "sample-bucket"},
         )
         stub.add_response(
+            "get_bucket_acl",
+            {
+                "Owner": {"ID": "owner"},
+                "Grants": [
+                    {
+                        "Grantee": {
+                            "Type": "CanonicalUser",
+                            "ID": "owner",
+                        },
+                        "Permission": "FULL_CONTROL",
+                    }
+                ],
+            },
+            {"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
             "get_bucket_encryption",
             {
                 "ServerSideEncryptionConfiguration": {
@@ -216,6 +232,8 @@ def test_s3_bucket_pagination_and_region_normalization():
     assert assets[0].region == "eu-west-1"
     assert assets[0].attributes == {
         "public": True,
+        "public_policy": True,
+        "public_acl": False,
         "encrypted": True,
         "logging_enabled": False,
         "versioning_enabled": True,
@@ -523,6 +541,9 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
         "_collect_inspector2",
         "_collect_macie",
         "_collect_backup",
+        "_collect_access_analyzer",
+        "_collect_ebs_snapshots",
+        "_collect_rds_snapshots",
     ]
     for name in regional_names:
         setattr(provider, name, Mock(return_value=[]))
