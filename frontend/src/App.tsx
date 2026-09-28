@@ -21,10 +21,14 @@ function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
     account_id: "",
     region: "eu-west-3",
     profile_name: "default",
+    scan_all_regions: false,
   });
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const update = (field: keyof AwsConnectionInput, value: string) => setConnection((current) => ({ ...current, [field]: value }));
+  const update = (
+    field: keyof AwsConnectionInput,
+    value: string | boolean,
+  ) => setConnection((current) => ({ ...current, [field]: value }));
   const validate = async () => {
     setBusy(true); setMessage(null);
     try { await testAwsConnection(connection); setMessage("AWS role validated. You can save this connection."); }
@@ -45,6 +49,12 @@ function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
       <label>External ID<input required minLength={16} value={connection.external_id} onChange={(event) => update("external_id", event.target.value)} placeholder="A unique value from the AWS trust policy" /></label>
       <label>AWS profile<input value={connection.profile_name ?? ""} onChange={(event) => update("profile_name", event.target.value)} placeholder="default" /><small>Use the AWS CLI/SSO profile already configured on this PC.</small></label>
       <label>Default region<input required value={connection.region} onChange={(event) => update("region", event.target.value)} placeholder="eu-west-3" /></label>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={connection.scan_all_regions}
+          onChange={(event) => update("scan_all_regions", event.target.checked)} />
+        <span>Scan all enabled AWS regions</span>
+      </label>
+      <small>When enabled, AegisShield discovers enabled regions and runs regional posture checks in each one.</small>
       <div className="connection-actions"><button disabled={busy} type="submit">{busy ? "Validating…" : "Validate AWS role"}</button><button disabled={busy} type="button" onClick={() => void save()}>Save connection</button></div>
     </form>
     {message && <p className={message.startsWith("AWS role validated") || message.startsWith("Connection saved") ? "notice" : "error"}>{message}</p>}
