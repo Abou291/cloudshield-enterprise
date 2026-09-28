@@ -610,9 +610,15 @@ def test_iam_user_group_and_inline_admin_are_flagged() -> None:
             ]
         )
     )
-    paginators["list_mfa_devices"].paginate.return_value = [{"MFADevices": [{"SerialNumber": "mfa"}]}]
-    paginators["list_access_keys"].paginate.return_value = [{"AccessKeyMetadata": []}]
-    paginators["list_attached_user_policies"].paginate.return_value = [{"AttachedPolicies": []}]
+    paginators["list_mfa_devices"].paginate.return_value = [
+        {"MFADevices": [{"SerialNumber": "mfa"}]}
+    ]
+    paginators["list_access_keys"].paginate.return_value = [
+        {"AccessKeyMetadata": []}
+    ]
+    paginators["list_attached_user_policies"].paginate.return_value = [
+        {"AttachedPolicies": []}
+    ]
     paginators["list_groups_for_user"].paginate.return_value = [
         {"Groups": [{"GroupName": "admins"}]}
     ]
