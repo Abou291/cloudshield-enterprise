@@ -8,6 +8,7 @@ def test_diagnostics_and_security_report(client):
     assert diagnostics.status_code == 200
     assert diagnostics.json()["backend"] == "ok"
     assert diagnostics.json()["database"] == "ok"
+    assert diagnostics.json()["version"] == "0.6.1"
 
     client.post("/api/v1/scans/demo")
     report = client.get("/api/v1/reports/security?source=demo-fixture")
