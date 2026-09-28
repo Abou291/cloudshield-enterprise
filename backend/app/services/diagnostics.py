@@ -17,7 +17,7 @@ def product_version() -> str:
     try:
         return version("aegisshield-api")
     except PackageNotFoundError:
-        return "0.3.0"
+        return "0.5.0"
 
 
 def classify_aws_error(exc: Exception) -> tuple[str, str]:
@@ -103,6 +103,7 @@ def aws_diagnostics(connection: AwsConnection) -> dict:
             connection.external_id,
             connection.account_id,
             connection.profile_name,
+            connection.scan_all_regions,
         )
     except Exception as exc:
         code, message = classify_aws_error(exc)
@@ -113,6 +114,7 @@ def aws_diagnostics(connection: AwsConnection) -> dict:
             "account_id": connection.account_id,
             "region": connection.region,
             "profile_name": connection.profile_name,
+            "scan_all_regions": connection.scan_all_regions,
         }
 
     return {
@@ -122,4 +124,5 @@ def aws_diagnostics(connection: AwsConnection) -> dict:
         "account_id": provider.account_id,
         "region": connection.region,
         "profile_name": connection.profile_name,
+        "scan_all_regions": connection.scan_all_regions,
     }

@@ -4,7 +4,7 @@ AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discov
 
 ## Windows desktop pilot
 
-The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.4.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
+The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.5.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
 
 The desktop backend binds to `127.0.0.1` only. Electron generates a fresh random bearer token and instance nonce at each launch; the token is injected into local API requests and is not persisted in the renderer. Production API docs are disabled in the packaged application.
 
@@ -24,7 +24,7 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - Hashed API tokens, viewer/operator roles and server-selected tenant identity.
 - Tenant/source-isolated findings, transactional scan persistence and durable per-tenant scan locks.
 - Windows Electron wrapper with sandboxing, navigation restrictions and CSP.
-- GitHub Actions gates for backend SQLite/PostgreSQL tests, frontend lint/test/build, secret scanning, SAST, IaC scanning, dependency audit, Trivy and CycloneDX SBOM generation.
+- GitHub Actions gates for backend SQLite/PostgreSQL tests, frontend lint/test/build, secret scanning, pinned-version Semgrep SAST, IaC scanning, pinned dependency audit, Trivy and CycloneDX SBOM generation.
 - Windows workflow that builds, smoke-tests and uploads the installer plus SHA-256 checksum.
 - Desktop diagnostics, AWS validation, SQLite backup/restore and machine-readable security-report export with integrity checksum.
 - Certificate-gated tagged release workflow: public Windows releases fail closed unless an Authenticode signing certificate is configured.
@@ -35,7 +35,7 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 1. Install AWS CLI v2 and configure a short-lived IAM Identity Center/SSO profile on the PC.
 2. Deploy `infra/aws/aegisshield-readonly-role.yaml` in the AWS account with a unique External ID.
 3. Install AegisShield and open **Connect AWS account**.
-4. Enter the Role ARN, AWS Account ID, External ID, AWS profile name and default region.
+4. Enter the Role ARN, AWS Account ID, External ID, AWS profile name and default region. Optionally enable **Scan all enabled AWS regions**.
 5. Choose **Validate AWS role**; AegisShield performs STS AssumeRole and checks the resulting AWS Account ID.
 6. Save the connection and run an AWS scan.
 
@@ -47,11 +47,17 @@ The scanner currently checks:
 
 - IAM users: MFA state, active access-key age and attached `AdministratorAccess`.
 - IAM: root MFA/root access-key posture, user MFA, access-key age and direct AdministratorAccess.
-- S3: public-policy status, Block Public Access, server-side encryption and access logging.
-- EC2: security-group IPv4/IPv6 exposure and EBS volume encryption.
-- RDS: public accessibility, storage encryption and deletion protection.
+- S3: public-policy status, Block Public Access, server-side encryption, versioning and access logging.
+- EC2/VPC: security-group IPv4/IPv6 exposure, EBS volume encryption, EBS encryption-by-default and VPC Flow Logs.
+- RDS: public accessibility, storage encryption, deletion protection and automated-backup retention.
 - CloudTrail: logging state, multi-Region configuration and log-file validation.
 - GuardDuty: detector enabled/disabled state.
+- Security Hub: enabled/disabled state.
+- AWS Config: recorder presence and active-recording state.
+- KMS: automatic rotation state for eligible customer-managed symmetric keys.
+- Lambda: public Function URLs configured with `AuthType NONE`.
+- IAM account password policy: presence and baseline properties.
+- Optional multi-Region scanning: discovers enabled AWS regions and runs regional collectors in each one; mono-Region remains the default.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
 This coverage is intentionally narrower than a mature enterprise CSPM. A successful scan does not prove that an AWS account is secure or compliant.
@@ -110,6 +116,7 @@ See:
 - [Threat model](docs/threat-model.md)
 - [Security foundation and safe upgrade](docs/security-foundation.md)
 - [Windows pilot runbook](docs/DESKTOP_PILOT.md)
+- [AWS coverage matrix](docs/AWS_COVERAGE.md)
 - [Implementation roadmap](docs/implementation-roadmap.md)
 
 ## License

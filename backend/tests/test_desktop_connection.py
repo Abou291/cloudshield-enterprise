@@ -10,6 +10,7 @@ def test_desktop_connection_persists_only_role_metadata(tmp_path):
         account_id="123456789012",
         region="eu-west-3",
         profile_name="company-sso",
+        scan_all_regions=True,
     )
 
     store = DesktopConnectionStore(path)
@@ -20,6 +21,7 @@ def test_desktop_connection_persists_only_role_metadata(tmp_path):
     assert "AccessKey" not in persisted
     assert "SecretAccessKey" not in persisted
     assert "company-sso" in persisted
+    assert "scan_all_regions" in persisted
 
 
 def test_desktop_connection_missing_file_is_not_configured(tmp_path):

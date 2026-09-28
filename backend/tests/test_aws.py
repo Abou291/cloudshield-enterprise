@@ -194,6 +194,11 @@ def test_s3_bucket_pagination_and_region_normalization():
             "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
         )
         stub.add_response(
+            "get_bucket_versioning",
+            {"Status": "Enabled"},
+            {"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
             "get_public_access_block",
             {
                 "PublicAccessBlockConfiguration": {
@@ -213,6 +218,7 @@ def test_s3_bucket_pagination_and_region_normalization():
         "public": True,
         "encrypted": True,
         "logging_enabled": False,
+        "versioning_enabled": True,
         "block_public_access": True,
     }
 
@@ -315,3 +321,203 @@ def test_cloudtrail_not_logging_collected():
         assets = provider._collect_cloudtrail()
     assert assets[0].attributes["logging"] is False
     assert assets[0].attributes["multi_region"] is False
+
+
+def test_iam_password_policy_missing_collected():
+    provider, client = provider_with_client("iam")
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "get_account_password_policy",
+            service_error_code="NoSuchEntity",
+        )
+        assets = provider._collect_iam_password_policy()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "iam_password_policy"
+    assert assets[0].attributes["configured"] is False
+
+
+def test_ebs_default_encryption_disabled_collected():
+    provider, client = provider_with_client("ec2")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "get_ebs_encryption_by_default",
+            {"EbsEncryptionByDefault": False},
+            {},
+        )
+        assets = provider._collect_ebs_default_encryption()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "ebs_account_settings"
+    assert assets[0].attributes["encryption_by_default"] is False
+
+
+def test_vpc_without_flow_logs_collected():
+    provider, client = provider_with_client("ec2")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "describe_vpcs",
+            {
+                "Vpcs": [
+                    {
+                        "CidrBlock": "10.0.0.0/16",
+                        "DhcpOptionsId": "dopt-12345678",
+                        "State": "available",
+                        "VpcId": "vpc-12345678",
+                        "OwnerId": "111111111111",
+                        "InstanceTenancy": "default",
+                        "IsDefault": False,
+                    }
+                ]
+            },
+            {},
+        )
+        stub.add_response("describe_flow_logs", {"FlowLogs": []}, {})
+        assets = provider._collect_vpc_flow_logs()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "vpc"
+    assert assets[0].attributes["flow_logs_enabled"] is False
+
+
+def test_securityhub_not_subscribed_collected_as_disabled():
+    provider, client = provider_with_client("securityhub")
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "describe_hub",
+            service_error_code="InvalidAccessException",
+        )
+        assets = provider._collect_securityhub()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "securityhub"
+    assert assets[0].attributes["enabled"] is False
+
+
+def test_config_without_recorder_collected_as_disabled():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    client = Mock()
+    client.describe_configuration_recorders.return_value = {
+        "ConfigurationRecorders": []
+    }
+    client.describe_configuration_recorder_status.return_value = {
+        "ConfigurationRecordersStatus": []
+    }
+    provider.client = Mock(return_value=client)
+    assets = provider._collect_config()
+    assert assets[0].resource_type == "aws_config_recorder"
+    assert assets[0].attributes["recording"] is False
+
+
+def test_customer_kms_key_without_rotation_collected():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    client = Mock()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {"Keys": [{"KeyId": "key-1", "KeyArn": "arn:aws:kms:eu-west-3:111111111111:key/key-1"}]}
+    ]
+    client.get_paginator.return_value = paginator
+    client.describe_key.return_value = {
+        "KeyMetadata": {
+            "KeyId": "key-1",
+            "Arn": "arn:aws:kms:eu-west-3:111111111111:key/key-1",
+            "KeyManager": "CUSTOMER",
+            "KeyState": "Enabled",
+            "KeySpec": "SYMMETRIC_DEFAULT",
+        }
+    }
+    client.get_key_rotation_status.return_value = {"KeyRotationEnabled": False}
+    provider.client = Mock(return_value=client)
+    assets = provider._collect_kms()
+    assert assets[0].resource_type == "kms_key"
+    assert assets[0].attributes["rotation_supported"] is True
+    assert assets[0].attributes["rotation_enabled"] is False
+
+
+def test_public_lambda_function_url_collected():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    client = Mock()
+    functions = Mock()
+    urls = Mock()
+    functions.paginate.return_value = [
+        {
+            "Functions": [
+                {
+                    "FunctionName": "public-api",
+                    "FunctionArn": "arn:aws:lambda:eu-west-3:111111111111:function:public-api",
+                }
+            ]
+        }
+    ]
+    urls.paginate.return_value = [
+        {
+            "FunctionUrlConfigs": [
+                {
+                    "FunctionUrl": "https://example.lambda-url.eu-west-3.on.aws/",
+                    "FunctionArn": "arn:aws:lambda:eu-west-3:111111111111:function:public-api",
+                    "AuthType": "NONE",
+                }
+            ]
+        }
+    ]
+
+    def paginator_for(operation):
+        return functions if operation == "list_functions" else urls
+
+    client.get_paginator.side_effect = paginator_for
+    provider.client = Mock(return_value=client)
+    assets = provider._collect_lambda_function_urls()
+    assert assets[0].resource_type == "lambda_function_url"
+    assert assets[0].attributes["public_without_auth"] is True
+
+
+def test_enabled_region_discovery_is_sorted_and_deduplicated():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.region = "eu-west-3"
+    client = Mock()
+    client.describe_regions.return_value = {
+        "Regions": [
+            {"RegionName": "us-east-1"},
+            {"RegionName": "eu-west-3"},
+            {"RegionName": "us-east-1"},
+        ]
+    }
+    provider.client = Mock(return_value=client)
+    assert provider._enabled_regions() == ["eu-west-3", "us-east-1"]
+    client.describe_regions.assert_called_once_with(AllRegions=False)
+
+
+def test_multi_region_collect_runs_global_once_and_regional_per_region():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    provider.scan_all_regions = True
+    provider._enabled_regions = Mock(return_value=["eu-west-3", "us-east-1"])
+    provider._collect_iam = Mock(return_value=[])
+    provider._collect_iam_password_policy = Mock(return_value=[])
+    provider._collect_s3 = Mock(return_value=[])
+    regional_names = [
+        "_collect_security_groups",
+        "_collect_ebs",
+        "_collect_ebs_default_encryption",
+        "_collect_vpc_flow_logs",
+        "_collect_rds",
+        "_collect_cloudtrail",
+        "_collect_guardduty",
+        "_collect_securityhub",
+        "_collect_config",
+        "_collect_kms",
+        "_collect_lambda_function_urls",
+    ]
+    for name in regional_names:
+        setattr(provider, name, Mock(return_value=[]))
+
+    assert provider.collect() == []
+    provider._collect_iam.assert_called_once()
+    provider._collect_iam_password_policy.assert_called_once()
+    provider._collect_s3.assert_called_once()
+    for name in regional_names:
+        assert getattr(provider, name).call_count == 2
+    assert provider.region == "eu-west-3"

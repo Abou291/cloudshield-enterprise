@@ -121,3 +121,14 @@ header button { background: #f1f5f4; color: #0b1110; border-radius: 7px; }
   margin-top: 12px;
   overflow-wrap: anywhere;
 }
+
+.checkbox-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.65rem;
+}
+.checkbox-row input {
+  width: auto !important;
+  margin: 0;
+}

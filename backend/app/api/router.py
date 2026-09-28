@@ -87,6 +87,7 @@ class DesktopAwsConnectionView(BaseModel):
     account_id: str
     region: str
     profile_name: str | None = None
+    scan_all_regions: bool = False
 
 
 def local_connection() -> AwsConnection | None:
@@ -106,6 +107,7 @@ def get_desktop_aws_connection(principal: Operator) -> DesktopAwsConnectionView:
         account_id=connection.account_id,
         region=connection.region,
         profile_name=connection.profile_name,
+        scan_all_regions=connection.scan_all_regions,
     )
 
 
@@ -122,6 +124,7 @@ def save_desktop_aws_connection(
         account_id=payload.account_id,
         region=payload.region,
         profile_name=payload.profile_name,
+        scan_all_regions=payload.scan_all_regions,
     )
 
 
@@ -139,6 +142,7 @@ def test_desktop_aws_connection(
             payload.external_id,
             payload.account_id,
             payload.profile_name,
+            payload.scan_all_regions,
         )
     except Exception as exc:
         code, message = classify_aws_error(exc)
@@ -148,6 +152,7 @@ def test_desktop_aws_connection(
         account_id=payload.account_id,
         region=payload.region,
         profile_name=payload.profile_name,
+        scan_all_regions=payload.scan_all_regions,
     )
 
 
@@ -321,6 +326,7 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
             connection.external_id,
             connection.account_id,
             connection.profile_name,
+            connection.scan_all_regions,
         )
     except Exception as exc:
         code, message = classify_aws_error(exc)
