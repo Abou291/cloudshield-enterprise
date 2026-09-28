@@ -164,7 +164,10 @@ def test_internet_load_balancer_without_tls_is_flagged() -> None:
         {
             "LoadBalancers": [
                 {
-                    "LoadBalancerArn": "arn:aws:elasticloadbalancing:eu-west-3:111111111111:loadbalancer/app/web/123",
+                    "LoadBalancerArn": (
+                        "arn:aws:elasticloadbalancing:eu-west-3:111111111111:"
+                        "loadbalancer/app/web/123"
+                    ),
                     "LoadBalancerName": "web",
                     "Scheme": "internet-facing",
                     "Type": "application",
