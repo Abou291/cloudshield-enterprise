@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.auth import Identity, Operator
@@ -18,6 +18,7 @@ from app.core.domain import (
     ScanResult,
     Severity,
 )
+from app.db.migrations import CURRENT_SCHEMA_VERSION, schema_version
 from app.db.models import AuditRecord, ScanRecord
 from app.db.session import engine, get_db
 from app.scanners.aws import AwsInventoryProvider
@@ -241,6 +242,23 @@ def security_report(
 @router.get("/health")
 def health() -> dict[str, str | None]:
     return {"status": "ok", "instance": get_settings().instance_nonce}
+
+
+@router.get("/ready")
+def readiness(db: DatabaseSession) -> dict[str, str | int]:
+    try:
+        db.execute(text("SELECT 1"))
+        current_schema = schema_version(db)
+    except Exception as exc:
+        raise HTTPException(503, "Database is not ready") from exc
+    if current_schema != CURRENT_SCHEMA_VERSION:
+        raise HTTPException(503, "Database schema is not current")
+    return {
+        "status": "ready",
+        "database": "ok",
+        "schema_version": current_schema,
+        "schema_target": CURRENT_SCHEMA_VERSION,
+    }
 
 
 @router.get("/findings", response_model=list[Finding])
