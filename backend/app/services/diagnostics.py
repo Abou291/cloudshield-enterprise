@@ -103,6 +103,7 @@ def aws_diagnostics(connection: AwsConnection) -> dict:
             connection.external_id,
             connection.account_id,
             connection.profile_name,
+            connection.scan_all_regions,
         )
     except Exception as exc:
         code, message = classify_aws_error(exc)
@@ -113,6 +114,7 @@ def aws_diagnostics(connection: AwsConnection) -> dict:
             "account_id": connection.account_id,
             "region": connection.region,
             "profile_name": connection.profile_name,
+            "scan_all_regions": connection.scan_all_regions,
         }
 
     return {
