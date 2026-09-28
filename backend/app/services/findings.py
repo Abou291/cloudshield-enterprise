@@ -41,7 +41,11 @@ class FindingRepository:
     def upsert_many(self, findings: list[Finding]) -> None:
         now = datetime.now(UTC)
         for finding in findings:
-            record = self.db.get(FindingRecord, (self.tenant_id, self.source, finding.fingerprint))
+            record = self.db.get(
+                FindingRecord,
+                (self.tenant_id, self.source, finding.fingerprint),
+            )
+            previous_status = record.status if record is not None else None
             if record is None:
                 record = FindingRecord(
                     fingerprint=finding.fingerprint,
@@ -60,23 +64,64 @@ class FindingRepository:
             record.region = finding.region
             record.evidence = finding.evidence
             record.recommendation = finding.recommendation
-            record.status = finding.status.value
+            if previous_status == FindingStatus.ACKNOWLEDGED.value:
+                record.status = FindingStatus.ACKNOWLEDGED.value
+            elif previous_status is None:
+                record.status = finding.status.value
+            else:
+                record.status = FindingStatus.OPEN.value
             record.risk_score = finding.risk.score
             record.risk_reasons = finding.risk.reasons
             record.risk_factors = finding.risk.factors
             record.last_seen_at = now
         self.db.flush()
 
+    def reconcile(self, findings: list[Finding]) -> None:
+        """Persist the current scan and resolve active findings no longer observed."""
+        current_fingerprints = {finding.fingerprint for finding in findings}
+        self.upsert_many(findings)
+        active_records = self.db.scalars(
+            select(FindingRecord).where(
+                FindingRecord.tenant_id == self.tenant_id,
+                FindingRecord.source == self.source,
+                FindingRecord.status != FindingStatus.RESOLVED.value,
+            )
+        ).all()
+        for record in active_records:
+            if record.fingerprint not in current_fingerprints:
+                record.status = FindingStatus.RESOLVED.value
+        self.db.flush()
+
+    def set_status(self, fingerprint: str, status: FindingStatus) -> Finding | None:
+        record = self.db.get(
+            FindingRecord,
+            (self.tenant_id, self.source, fingerprint),
+        )
+        if record is None:
+            return None
+        record.status = status.value
+        self.db.flush()
+        return to_domain(record)
+
     def list(
-        self, severity: Severity | None = None, limit: int = 100, offset: int = 0
+        self,
+        severity: Severity | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        include_resolved: bool = False,
     ) -> list[Finding]:
         query = (
             select(FindingRecord)
-            .where(FindingRecord.tenant_id == self.tenant_id, FindingRecord.source == self.source)
+            .where(
+                FindingRecord.tenant_id == self.tenant_id,
+                FindingRecord.source == self.source,
+            )
             .order_by(FindingRecord.risk_score.desc(), FindingRecord.fingerprint)
             .offset(offset)
             .limit(limit)
         )
         if severity:
             query = query.where(FindingRecord.severity == severity.value)
+        if not include_resolved:
+            query = query.where(FindingRecord.status != FindingStatus.RESOLVED.value)
         return [to_domain(record) for record in self.db.scalars(query).all()]
