@@ -17,7 +17,7 @@ def product_version() -> str:
     try:
         return version("aegisshield-api")
     except PackageNotFoundError:
-        return "0.5.0"
+        return "0.6.1"
 
 
 def classify_aws_error(exc: Exception) -> tuple[str, str]:
