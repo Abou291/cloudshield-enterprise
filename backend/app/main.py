@@ -12,6 +12,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.router import router
 from app.core.config import get_settings
 from app.db.session import init_db
+from app.services.diagnostics import product_version
 
 
 @asynccontextmanager
@@ -24,7 +25,7 @@ settings = get_settings()
 production = settings.env == "production"
 app = FastAPI(
     title=settings.app_name,
-    version="0.6.1",
+    version=product_version(),
     description="Explainable AWS cloud security posture management",
     lifespan=lifespan,
     docs_url=None if production else "/docs",
