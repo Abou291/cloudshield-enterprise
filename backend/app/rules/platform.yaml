@@ -1,4 +1,39 @@
 rules:
+  - id: CFG-001
+    name: AWS Config recorder disabled
+    description: No active AWS Config recorder was detected in the selected Region.
+    resource_type: aws_config_recorder
+    severity: high
+    confidence: 0.96
+    conditions:
+      - path: recording
+        operator: is_false
+    remediation: Enable AWS Config recording and centralize configuration history where the account architecture requires it.
+
+  - id: KMS-001
+    name: Customer KMS key rotation disabled
+    description: An enabled symmetric customer-managed KMS key supports automatic rotation but rotation is disabled.
+    resource_type: kms_key
+    severity: medium
+    confidence: 0.95
+    conditions:
+      - path: rotation_supported
+        operator: is_true
+      - path: rotation_enabled
+        operator: is_false
+    remediation: Enable automatic key rotation when compatible with the key lifecycle and application requirements.
+
+  - id: LAMBDA-001
+    name: Lambda Function URL allows unauthenticated access
+    description: A Lambda Function URL is configured with AuthType NONE and is directly callable without AWS IAM authentication.
+    resource_type: lambda_function_url
+    severity: high
+    confidence: 0.98
+    conditions:
+      - path: public_without_auth
+        operator: is_true
+    remediation: Require AWS_IAM authentication or place the function behind an explicitly secured API or identity-aware access layer.
+
   - id: IAM-006
     name: IAM account password policy missing
     description: No account-level IAM password policy is configured for IAM users.
