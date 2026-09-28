@@ -141,5 +141,6 @@ jobs:
             desktop/dist/AegisShield-Setup-*.exe
             desktop/dist/*.blockmap
             desktop/dist/SHA256SUMS.txt
+            desktop/package-lock.json
           if-no-files-found: error
           retention-days: 14
