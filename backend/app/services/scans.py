@@ -74,7 +74,7 @@ class ScanService:
             for finding in findings:
                 finding.source = self.source
             repository = FindingRepository(self.db, self.principal.tenant_id, self.source)
-            repository.upsert_many(findings)
+            repository.reconcile(findings)
             record.status = "succeeded"
             record.assets_scanned = len(assets)
             record.findings_count = len(findings)
