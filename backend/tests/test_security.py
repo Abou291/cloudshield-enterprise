@@ -230,3 +230,23 @@ def test_request_body_size_is_limited(client):
         headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 413
+
+
+def test_cors_preflight_allows_finding_patch(client):
+    response = client.options(
+        "/api/v1/findings/example/status",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "content-type,authorization",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+
+
+def test_openapi_reports_current_product_version(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    assert response.json()["info"]["version"] == "0.6.1"
