@@ -7,9 +7,10 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.domain import Asset
+from app.scanners.aws_extended import AwsExtendedCollectorsMixin
 
 
-class AwsInventoryProvider:
+class AwsInventoryProvider(AwsExtendedCollectorsMixin):
     """Read-only AWS collector with fail-soft optional service coverage."""
 
     def __init__(
@@ -60,10 +61,12 @@ class AwsInventoryProvider:
         global_collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
             ("iam", self._collect_iam),
             ("iam-password-policy", self._collect_iam_password_policy),
+            ("iam-roles", self._collect_iam_roles),
             ("s3", self._collect_s3),
         ]
         regional_collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
             ("ec2-security-groups", self._collect_security_groups),
+            ("ec2-instances", self._collect_ec2_instances),
             ("ebs", self._collect_ebs),
             ("ebs-default-encryption", self._collect_ebs_default_encryption),
             ("vpc-flow-logs", self._collect_vpc_flow_logs),
@@ -74,6 +77,10 @@ class AwsInventoryProvider:
             ("config", self._collect_config),
             ("kms", self._collect_kms),
             ("lambda-function-urls", self._collect_lambda_function_urls),
+            ("ecr", self._collect_ecr),
+            ("secrets-manager", self._collect_secrets_manager),
+            ("eks", self._collect_eks),
+            ("load-balancers", self._collect_load_balancers),
         ]
         assets: list[Asset] = []
         for service, collector in global_collectors:
