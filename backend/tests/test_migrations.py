@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
@@ -64,7 +66,7 @@ def test_newer_database_schema_fails_closed() -> None:
             SchemaMigrationRecord.__table__.insert().values(
                 version=CURRENT_SCHEMA_VERSION + 1,
                 name="future-schema",
-                applied_at="2026-09-28 08:00:00",
+                applied_at=datetime.now(UTC),
             )
         )
 
