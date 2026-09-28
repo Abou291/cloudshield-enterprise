@@ -420,3 +420,95 @@ def test_iam_role_inline_wildcard_admin_is_flagged() -> None:
 
     assert assets[0].attributes["inline_wildcard_admin"] is True
     assert {finding.rule_id for finding in findings} == {"IAM-011"}
+
+
+def test_cloudtrail_stop_logging_event_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    event_time = datetime.now(UTC)
+    client.lookup_events.return_value = {
+        "Events": [
+            {
+                "EventId": "evt-1",
+                "EventName": "StopLogging",
+                "EventSource": "cloudtrail.amazonaws.com",
+                "EventTime": event_time,
+                "Username": "ops-role",
+                "CloudTrailEvent": (
+                    '{"sourceIPAddress":"203.0.113.5",'
+                    '"userIdentity":{"arn":"arn:aws:sts::111111111111:assumed-role/ops/session"}}'
+                ),
+            },
+            {
+                "EventId": "evt-2",
+                "EventName": "DescribeInstances",
+                "EventSource": "ec2.amazonaws.com",
+                "EventTime": event_time,
+            },
+        ]
+    }
+
+    assets = provider._collect_cloudtrail_security_events()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert len(assets) == 1
+    assert assets[0].attributes["source_ip"] == "203.0.113.5"
+    assert {finding.rule_id for finding in findings} == {"CDR-001"}
+
+
+def test_cloudtrail_event_collection_marks_bounded_coverage() -> None:
+    provider, client = provider_with_mock_client()
+    client.lookup_events.return_value = {"Events": [], "NextToken": "more"}
+
+    assets = provider._collect_cloudtrail_security_events()
+
+    assert len(client.lookup_events.call_args_list) == 4
+    assert assets[-1].resource_type == "coverage_gap"
+    assert assets[-1].attributes["reason"] == "bounded_to_200_recent_events"
+
+
+def test_guardduty_critical_finding_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    client.list_detectors.return_value = {"DetectorIds": ["detector-1"]}
+    client.list_findings.return_value = {"FindingIds": ["finding-1"]}
+    client.get_findings.return_value = {
+        "Findings": [
+            {
+                "Id": "finding-1",
+                "Arn": "arn:aws:guardduty:eu-west-3:111111111111:detector/d/finding/finding-1",
+                "Region": "eu-west-3",
+                "Title": "Credential exfiltration",
+                "Type": "CredentialAccess:IAMUser/AnomalousBehavior",
+                "Severity": 9.2,
+                "UpdatedAt": "2026-09-28T10:00:00Z",
+                "Service": {"Archived": False},
+            }
+        ]
+    }
+
+    assets = provider._collect_guardduty_findings()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["severity_band"] == "critical"
+    assert {finding.rule_id for finding in findings} == {"GD-001"}
+
+
+def test_archived_or_low_guardduty_findings_are_not_emitted() -> None:
+    provider, client = provider_with_mock_client()
+    client.list_detectors.return_value = {"DetectorIds": ["detector-1"]}
+    client.list_findings.return_value = {"FindingIds": ["a", "b"]}
+    client.get_findings.return_value = {
+        "Findings": [
+            {
+                "Id": "a",
+                "Severity": 9.5,
+                "Service": {"Archived": True},
+            },
+            {
+                "Id": "b",
+                "Severity": 4.0,
+                "Service": {"Archived": False},
+            },
+        ]
+    }
+
+    assert provider._collect_guardduty_findings() == []
