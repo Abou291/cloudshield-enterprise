@@ -8,7 +8,9 @@ def test_diagnostics_and_security_report(client):
     assert diagnostics.status_code == 200
     assert diagnostics.json()["backend"] == "ok"
     assert diagnostics.json()["database"] == "ok"
-    assert diagnostics.json()["version"] == "0.6.1"
+    assert diagnostics.json()["version"] == "0.7.0"
+    assert diagnostics.json()["schema_current"] is True
+    assert diagnostics.json()["schema_version"] == diagnostics.json()["schema_target"]
 
     client.post("/api/v1/scans/demo")
     report = client.get("/api/v1/reports/security?source=demo-fixture")
@@ -43,3 +45,12 @@ def test_desktop_backup_and_restore_round_trip(tmp_path):
     with sqlite3.connect(database) as connection:
         value = connection.execute("SELECT value FROM sample").fetchone()[0]
     assert value == "before"
+
+
+def test_readiness_reports_database_and_schema_state(client):
+    response = client.get("/api/v1/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["database"] == "ok"
+    assert body["schema_version"] == body["schema_target"]
