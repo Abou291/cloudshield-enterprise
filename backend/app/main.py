@@ -24,7 +24,7 @@ settings = get_settings()
 production = settings.env == "production"
 app = FastAPI(
     title=settings.app_name,
-    version="0.5.0",
+    version="0.6.1",
     description="Explainable AWS cloud security posture management",
     lifespan=lifespan,
     docs_url=None if production else "/docs",
@@ -41,7 +41,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
     expose_headers=["X-Request-ID"],
 )
