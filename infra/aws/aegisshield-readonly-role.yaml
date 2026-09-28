@@ -107,6 +107,9 @@ Resources:
                   - sqs:GetQueueAttributes
                   - sns:ListTopics
                   - sns:GetTopicAttributes
+                  - inspector2:BatchGetAccountStatus
+                  - macie2:GetMacieSession
+                  - backup:ListBackupPlans
                 Resource: "*"
 
 Outputs:
