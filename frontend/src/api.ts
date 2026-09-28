@@ -21,8 +21,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export const listFindings = (source: string, offset = 0) =>
-  request<Finding[]>(`/findings?source=${encodeURIComponent(source)}&limit=100&offset=${offset}`);
+export const listFindings = (source: string, offset = 0, includeResolved = false) =>
+  request<Finding[]>(
+    `/findings?source=${encodeURIComponent(source)}&limit=100&offset=${offset}&include_resolved=${includeResolved}`,
+  );
 
 export const updateFindingStatus = (
   fingerprint: string,
