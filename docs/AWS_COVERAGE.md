@@ -52,6 +52,9 @@ AegisShield 0.7.0 is a read-only AWS CSPM pilot. This document describes what th
 | EKS audit logging | EKS control-plane logging config | Audit log type disabled |
 | ALB/NLB transport | ELBv2 load balancers and listeners | Internet-facing load balancer without HTTPS/TLS listener |
 | CloudWatch Logs retention | CloudWatch DescribeLogGroups | No explicit retention period |
+| Amazon Inspector | Inspector2 BatchGetAccountStatus | Inspector not enabled |
+| Amazon Macie | Macie GetMacieSession | Macie not enabled |
+| AWS Backup | Backup ListBackupPlans | No active backup plan detected |
 
 ## Cryptography and serverless
 
