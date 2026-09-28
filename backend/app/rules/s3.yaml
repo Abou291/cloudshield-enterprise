@@ -43,3 +43,14 @@ rules:
       - path: block_public_access
         operator: is_false
     remediation: Enable all four S3 Block Public Access settings unless a documented public-access requirement exists.
+
+  - id: S3-005
+    name: S3 versioning disabled
+    description: Bucket versioning is not enabled, reducing recovery options after accidental or malicious object changes.
+    resource_type: s3_bucket
+    severity: low
+    confidence: 0.90
+    conditions:
+      - path: versioning_enabled
+        operator: is_false
+    remediation: Enable S3 Versioning where recovery requirements justify the additional storage lifecycle impact.

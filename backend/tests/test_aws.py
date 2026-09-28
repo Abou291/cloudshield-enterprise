@@ -191,6 +191,11 @@ def test_s3_bucket_pagination_and_region_normalization():
         )
         stub.add_response("get_bucket_logging", {}, {"Bucket": "sample-bucket"})
         stub.add_response(
+            "get_bucket_versioning",
+            {"Status": "Enabled"},
+            {"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
             "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
         )
         stub.add_response(
@@ -213,6 +218,7 @@ def test_s3_bucket_pagination_and_region_normalization():
         "public": True,
         "encrypted": True,
         "logging_enabled": False,
+        "versioning_enabled": True,
         "block_public_access": True,
     }
 
@@ -315,3 +321,70 @@ def test_cloudtrail_not_logging_collected():
         assets = provider._collect_cloudtrail()
     assert assets[0].attributes["logging"] is False
     assert assets[0].attributes["multi_region"] is False
+
+
+def test_iam_password_policy_missing_collected():
+    provider, client = provider_with_client("iam")
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "get_account_password_policy",
+            service_error_code="NoSuchEntity",
+        )
+        assets = provider._collect_iam_password_policy()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "iam_password_policy"
+    assert assets[0].attributes["configured"] is False
+
+
+def test_ebs_default_encryption_disabled_collected():
+    provider, client = provider_with_client("ec2")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "get_ebs_encryption_by_default",
+            {"EbsEncryptionByDefault": False},
+            {},
+        )
+        assets = provider._collect_ebs_default_encryption()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "ebs_account_settings"
+    assert assets[0].attributes["encryption_by_default"] is False
+
+
+def test_vpc_without_flow_logs_collected():
+    provider, client = provider_with_client("ec2")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "describe_vpcs",
+            {
+                "Vpcs": [
+                    {
+                        "CidrBlock": "10.0.0.0/16",
+                        "DhcpOptionsId": "dopt-12345678",
+                        "State": "available",
+                        "VpcId": "vpc-12345678",
+                        "OwnerId": "111111111111",
+                        "InstanceTenancy": "default",
+                        "IsDefault": False,
+                    }
+                ]
+            },
+            {},
+        )
+        stub.add_response("describe_flow_logs", {"FlowLogs": []}, {})
+        assets = provider._collect_vpc_flow_logs()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "vpc"
+    assert assets[0].attributes["flow_logs_enabled"] is False
+
+
+def test_securityhub_not_subscribed_collected_as_disabled():
+    provider, client = provider_with_client("securityhub")
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "describe_hub",
+            service_error_code="InvalidAccessException",
+        )
+        assets = provider._collect_securityhub()
+        stub.assert_no_pending_responses()
+    assert assets[0].resource_type == "securityhub"
+    assert assets[0].attributes["enabled"] is False

@@ -24,7 +24,7 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - Hashed API tokens, viewer/operator roles and server-selected tenant identity.
 - Tenant/source-isolated findings, transactional scan persistence and durable per-tenant scan locks.
 - Windows Electron wrapper with sandboxing, navigation restrictions and CSP.
-- GitHub Actions gates for backend SQLite/PostgreSQL tests, frontend lint/test/build, secret scanning, SAST, IaC scanning, dependency audit, Trivy and CycloneDX SBOM generation.
+- GitHub Actions gates for backend SQLite/PostgreSQL tests, frontend lint/test/build, secret scanning, pinned-version Semgrep SAST, IaC scanning, pinned dependency audit, Trivy and CycloneDX SBOM generation.
 - Windows workflow that builds, smoke-tests and uploads the installer plus SHA-256 checksum.
 - Desktop diagnostics, AWS validation, SQLite backup/restore and machine-readable security-report export with integrity checksum.
 - Certificate-gated tagged release workflow: public Windows releases fail closed unless an Authenticode signing certificate is configured.
@@ -47,11 +47,13 @@ The scanner currently checks:
 
 - IAM users: MFA state, active access-key age and attached `AdministratorAccess`.
 - IAM: root MFA/root access-key posture, user MFA, access-key age and direct AdministratorAccess.
-- S3: public-policy status, Block Public Access, server-side encryption and access logging.
-- EC2: security-group IPv4/IPv6 exposure and EBS volume encryption.
-- RDS: public accessibility, storage encryption and deletion protection.
+- S3: public-policy status, Block Public Access, server-side encryption, versioning and access logging.
+- EC2/VPC: security-group IPv4/IPv6 exposure, EBS volume encryption, EBS encryption-by-default and VPC Flow Logs.
+- RDS: public accessibility, storage encryption, deletion protection and automated-backup retention.
 - CloudTrail: logging state, multi-Region configuration and log-file validation.
 - GuardDuty: detector enabled/disabled state.
+- Security Hub: enabled/disabled state.
+- IAM account password policy: presence and baseline properties.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
 This coverage is intentionally narrower than a mature enterprise CSPM. A successful scan does not prove that an AWS account is secure or compliant.

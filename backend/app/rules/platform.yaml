@@ -1,4 +1,48 @@
 rules:
+  - id: IAM-006
+    name: IAM account password policy missing
+    description: No account-level IAM password policy is configured for IAM users.
+    resource_type: iam_password_policy
+    severity: medium
+    confidence: 0.95
+    conditions:
+      - path: configured
+        operator: is_false
+    remediation: Configure a strong IAM password policy and prefer IAM Identity Center for workforce access.
+
+  - id: EBS-002
+    name: EBS encryption by default disabled
+    description: New EBS volumes are not encrypted by default in the selected Region.
+    resource_type: ebs_account_settings
+    severity: medium
+    confidence: 0.97
+    conditions:
+      - path: encryption_by_default
+        operator: is_false
+    remediation: Enable EBS encryption by default in every enabled Region and review KMS key governance.
+
+  - id: VPC-001
+    name: VPC Flow Logs disabled
+    description: The VPC has no active VPC Flow Log detected.
+    resource_type: vpc
+    severity: medium
+    confidence: 0.90
+    conditions:
+      - path: flow_logs_enabled
+        operator: is_false
+    remediation: Enable VPC Flow Logs to a protected destination and define retention appropriate to investigation needs.
+
+  - id: SH-001
+    name: AWS Security Hub disabled
+    description: AWS Security Hub is not enabled in the selected Region.
+    resource_type: securityhub
+    severity: medium
+    confidence: 0.95
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: Enable Security Hub and centrally manage standards and findings where it fits the account architecture.
+
   - id: IAM-004
     name: Root account MFA disabled
     description: The AWS root account is not protected by multi-factor authentication.
@@ -53,6 +97,18 @@ rules:
       - path: storage_encrypted
         operator: is_false
     remediation: Migrate to an encrypted RDS instance and manage KMS key access according to least privilege.
+
+  - id: RDS-004
+    name: RDS automated backups disabled
+    description: The RDS instance has a backup retention period of zero days.
+    resource_type: rds_instance
+    severity: high
+    confidence: 0.96
+    conditions:
+      - path: backup_retention_days
+        operator: equals
+        value: 0
+    remediation: Configure an automated backup retention period appropriate to recovery requirements and test restoration.
 
   - id: RDS-003
     name: RDS deletion protection disabled

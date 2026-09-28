@@ -28,3 +28,9 @@ credentials*
 !.env.example
 !frontend/.env.example
 !frontend/.env.desktop
+
+# Local desktop databases and recovery artifacts
+*.db
+*.db-shm
+*.db-wal
+backups/

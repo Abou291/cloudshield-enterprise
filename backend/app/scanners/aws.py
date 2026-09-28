@@ -53,12 +53,16 @@ class AwsInventoryProvider:
     def collect(self) -> list[Asset]:
         collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
             ("iam", self._collect_iam),
+            ("iam-password-policy", self._collect_iam_password_policy),
             ("s3", self._collect_s3),
             ("ec2-security-groups", self._collect_security_groups),
             ("ebs", self._collect_ebs),
+            ("ebs-default-encryption", self._collect_ebs_default_encryption),
+            ("vpc-flow-logs", self._collect_vpc_flow_logs),
             ("rds", self._collect_rds),
             ("cloudtrail", self._collect_cloudtrail),
             ("guardduty", self._collect_guardduty),
+            ("securityhub", self._collect_securityhub),
         ]
         assets: list[Asset] = []
         for service, collector in collectors:
@@ -157,6 +161,35 @@ class AwsInventoryProvider:
             )
         return assets
 
+    def _collect_iam_password_policy(self) -> list[Asset]:
+        iam = self.client("iam")
+        try:
+            policy = iam.get_account_password_policy().get("PasswordPolicy", {})
+            configured = True
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "NoSuchEntity":
+                raise
+            policy = {}
+            configured = False
+        return [
+            Asset(
+                resource_id=f"arn:aws:iam::{self.account_id}:password-policy",
+                resource_type="iam_password_policy",
+                account_id=self.account_id,
+                region="global",
+                name="IAM account password policy",
+                attributes={
+                    "configured": configured,
+                    "minimum_length": int(policy.get("MinimumPasswordLength", 0)),
+                    "require_symbols": bool(policy.get("RequireSymbols", False)),
+                    "require_numbers": bool(policy.get("RequireNumbers", False)),
+                    "require_uppercase": bool(policy.get("RequireUppercaseCharacters", False)),
+                    "require_lowercase": bool(policy.get("RequireLowercaseCharacters", False)),
+                    "max_password_age": int(policy.get("MaxPasswordAge", 0)),
+                },
+            )
+        ]
+
     def _collect_s3(self) -> list[Asset]:
         s3 = self.client("s3")
         assets: list[Asset] = []
@@ -181,6 +214,7 @@ class AwsInventoryProvider:
                         "public": public,
                         "encrypted": encrypted,
                         "logging_enabled": logging,
+                        "versioning_enabled": self._bucket_versioning_enabled(s3, name),
                         "block_public_access": self._bucket_public_access_block(
                             s3, name
                         ),
@@ -252,6 +286,54 @@ class AwsInventoryProvider:
                 )
         return assets
 
+    def _collect_ebs_default_encryption(self) -> list[Asset]:
+        ec2 = self.client("ec2")
+        response = ec2.get_ebs_encryption_by_default()
+        return [
+            Asset(
+                resource_id=f"ec2:ebs-default-encryption:{self.region}",
+                resource_type="ebs_account_settings",
+                account_id=self.account_id,
+                region=self.region,
+                name="EBS default encryption",
+                attributes={
+                    "encryption_by_default": bool(
+                        response.get("EbsEncryptionByDefault", False)
+                    )
+                },
+            )
+        ]
+
+    def _collect_vpc_flow_logs(self) -> list[Asset]:
+        ec2 = self.client("ec2")
+        vpcs = [
+            vpc
+            for page in ec2.get_paginator("describe_vpcs").paginate()
+            for vpc in page.get("Vpcs", [])
+        ]
+        if not vpcs:
+            return []
+        flow_logged_resources = {
+            flow_log.get("ResourceId")
+            for page in ec2.get_paginator("describe_flow_logs").paginate()
+            for flow_log in page.get("FlowLogs", [])
+            if flow_log.get("FlowLogStatus", "ACTIVE") == "ACTIVE"
+        }
+        return [
+            Asset(
+                resource_id=vpc["VpcId"],
+                resource_type="vpc",
+                account_id=self.account_id,
+                region=self.region,
+                name=vpc["VpcId"],
+                attributes={
+                    "flow_logs_enabled": vpc["VpcId"] in flow_logged_resources,
+                    "is_default": bool(vpc.get("IsDefault", False)),
+                },
+            )
+            for vpc in vpcs
+        ]
+
     def _collect_rds(self) -> list[Asset]:
         rds = self.client("rds")
         assets: list[Asset] = []
@@ -275,6 +357,9 @@ class AwsInventoryProvider:
                                 database.get("DeletionProtection", False)
                             ),
                             "multi_az": bool(database.get("MultiAZ", False)),
+                            "backup_retention_days": int(
+                                database.get("BackupRetentionPeriod", 0)
+                            ),
                         },
                         context={"internet_exposed": public},
                     )
@@ -367,6 +452,29 @@ class AwsInventoryProvider:
             )
         return assets
 
+    def _collect_securityhub(self) -> list[Asset]:
+        securityhub = self.client("securityhub")
+        try:
+            response = securityhub.describe_hub()
+            enabled = bool(response.get("HubArn"))
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") not in {
+                "InvalidAccessException",
+                "ResourceNotFoundException",
+            }:
+                raise
+            enabled = False
+        return [
+            Asset(
+                resource_id=f"securityhub:{self.region}",
+                resource_type="securityhub",
+                account_id=self.account_id,
+                region=self.region,
+                name="AWS Security Hub",
+                attributes={"enabled": enabled},
+            )
+        ]
+
     @staticmethod
     def _bucket_public(s3: BaseClient, name: str) -> bool:
         try:
@@ -389,6 +497,11 @@ class AwsInventoryProvider:
             }:
                 return False
             raise
+
+    @staticmethod
+    def _bucket_versioning_enabled(s3: BaseClient, name: str) -> bool:
+        response = s3.get_bucket_versioning(Bucket=name)
+        return response.get("Status") == "Enabled"
 
     @staticmethod
     def _bucket_public_access_block(s3: BaseClient, name: str) -> bool:
