@@ -46,6 +46,12 @@ Resources:
                   - iam:ListAttachedUserPolicies
                   - iam:ListRoles
                   - iam:ListAttachedRolePolicies
+                  - iam:ListGroupsForUser
+                  - iam:ListAttachedGroupPolicies
+                  - iam:ListUserPolicies
+                  - iam:GetUserPolicy
+                  - iam:ListRolePolicies
+                  - iam:GetRolePolicy
                 Resource: "*"
               - Sid: StorageInventory
                 Effect: Allow
