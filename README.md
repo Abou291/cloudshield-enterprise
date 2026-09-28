@@ -71,6 +71,10 @@ The scanner currently checks:
 - Amazon Inspector: regional account enablement state.
 - Amazon Macie: regional service enablement state.
 - AWS Backup: presence of active backup plans.
+- IAM Access Analyzer: active analyzer presence per Region.
+- EBS snapshots: public create-volume exposure.
+- RDS manual snapshots: public restore exposure.
+- S3: bucket policy plus ACL public-access evidence.
 - Optional multi-Region scanning: discovers enabled AWS regions and runs regional collectors in each one; mono-Region remains the default.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
