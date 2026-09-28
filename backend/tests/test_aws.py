@@ -556,6 +556,8 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
         "_collect_access_analyzer",
         "_collect_ebs_snapshots",
         "_collect_rds_snapshots",
+        "_collect_cloudtrail_security_events",
+        "_collect_guardduty_findings",
     ]
     for name in regional_names:
         setattr(provider, name, Mock(return_value=[]))
