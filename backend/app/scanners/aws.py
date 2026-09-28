@@ -91,6 +91,8 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("access-analyzer", self._collect_access_analyzer),
             ("ebs-snapshots", self._collect_ebs_snapshots),
             ("rds-snapshots", self._collect_rds_snapshots),
+            ("cloudtrail-security-events", self._collect_cloudtrail_security_events),
+            ("guardduty-findings", self._collect_guardduty_findings),
         ]
         assets: list[Asset] = []
         for service, collector in global_collectors:
