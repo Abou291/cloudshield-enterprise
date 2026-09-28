@@ -63,6 +63,9 @@ class AwsInventoryProvider:
             ("cloudtrail", self._collect_cloudtrail),
             ("guardduty", self._collect_guardduty),
             ("securityhub", self._collect_securityhub),
+            ("config", self._collect_config),
+            ("kms", self._collect_kms),
+            ("lambda-function-urls", self._collect_lambda_function_urls),
         ]
         assets: list[Asset] = []
         for service, collector in collectors:
@@ -474,6 +477,116 @@ class AwsInventoryProvider:
                 attributes={"enabled": enabled},
             )
         ]
+
+    def _collect_config(self) -> list[Asset]:
+        config = self.client("config")
+        recorders = config.describe_configuration_recorders().get(
+            "ConfigurationRecorders", []
+        )
+        statuses = {
+            status.get("name"): status
+            for status in config.describe_configuration_recorder_status().get(
+                "ConfigurationRecordersStatus", []
+            )
+        }
+        if not recorders:
+            return [
+                Asset(
+                    resource_id=f"config:none:{self.region}",
+                    resource_type="aws_config_recorder",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name="AWS Config",
+                    attributes={"recording": False, "all_supported": False},
+                )
+            ]
+        return [
+            Asset(
+                resource_id=f"config:{recorder.get('name', 'default')}:{self.region}",
+                resource_type="aws_config_recorder",
+                account_id=self.account_id,
+                region=self.region,
+                name=recorder.get("name", "default"),
+                attributes={
+                    "recording": bool(
+                        statuses.get(recorder.get("name"), {}).get(
+                            "recording", False
+                        )
+                    ),
+                    "all_supported": bool(
+                        recorder.get("recordingGroup", {}).get(
+                            "allSupported", False
+                        )
+                    ),
+                },
+            )
+            for recorder in recorders
+        ]
+
+    def _collect_kms(self) -> list[Asset]:
+        kms = self.client("kms")
+        assets: list[Asset] = []
+        for page in kms.get_paginator("list_keys").paginate():
+            for key in page.get("Keys", []):
+                key_id = key["KeyId"]
+                metadata = kms.describe_key(KeyId=key_id).get("KeyMetadata", {})
+                if metadata.get("KeyManager") != "CUSTOMER":
+                    continue
+                symmetric = metadata.get("KeySpec") == "SYMMETRIC_DEFAULT"
+                enabled = metadata.get("KeyState") == "Enabled"
+                rotation_supported = symmetric and enabled
+                rotation_enabled = False
+                if rotation_supported:
+                    rotation_enabled = bool(
+                        kms.get_key_rotation_status(KeyId=key_id).get(
+                            "KeyRotationEnabled", False
+                        )
+                    )
+                assets.append(
+                    Asset(
+                        resource_id=metadata.get("Arn") or key.get("KeyArn") or key_id,
+                        resource_type="kms_key",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=key_id,
+                        attributes={
+                            "enabled": enabled,
+                            "rotation_supported": rotation_supported,
+                            "rotation_enabled": rotation_enabled,
+                        },
+                    )
+                )
+        return assets
+
+    def _collect_lambda_function_urls(self) -> list[Asset]:
+        lambda_client = self.client("lambda")
+        assets: list[Asset] = []
+        for page in lambda_client.get_paginator("list_functions").paginate():
+            for function in page.get("Functions", []):
+                function_name = function["FunctionName"]
+                paginator = lambda_client.get_paginator(
+                    "list_function_url_configs"
+                )
+                for url_page in paginator.paginate(FunctionName=function_name):
+                    for config in url_page.get("FunctionUrlConfigs", []):
+                        public = config.get("AuthType") == "NONE"
+                        assets.append(
+                            Asset(
+                                resource_id=config.get("FunctionUrl")
+                                or function.get("FunctionArn")
+                                or function_name,
+                                resource_type="lambda_function_url",
+                                account_id=self.account_id,
+                                region=self.region,
+                                name=function_name,
+                                attributes={
+                                    "auth_type": config.get("AuthType"),
+                                    "public_without_auth": public,
+                                },
+                                context={"internet_exposed": public},
+                            )
+                        )
+        return assets
 
     @staticmethod
     def _bucket_public(s3: BaseClient, name: str) -> bool:
