@@ -4,7 +4,7 @@ AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discov
 
 ## Windows desktop pilot
 
-The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.4.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
+The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.5.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
 
 The desktop backend binds to `127.0.0.1` only. Electron generates a fresh random bearer token and instance nonce at each launch; the token is injected into local API requests and is not persisted in the renderer. Production API docs are disabled in the packaged application.
 
@@ -115,6 +115,7 @@ See:
 - [Threat model](docs/threat-model.md)
 - [Security foundation and safe upgrade](docs/security-foundation.md)
 - [Windows pilot runbook](docs/DESKTOP_PILOT.md)
+- [AWS coverage matrix](docs/AWS_COVERAGE.md)
 - [Implementation roadmap](docs/implementation-roadmap.md)
 
 ## License
