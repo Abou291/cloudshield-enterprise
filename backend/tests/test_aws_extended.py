@@ -188,3 +188,82 @@ def test_internet_load_balancer_without_tls_is_flagged() -> None:
 
     assert assets[0].attributes["tls_listener"] is False
     assert {finding.rule_id for finding in findings} == {"LB-001"}
+
+
+def test_dynamodb_without_pitr_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    paginator = Mock()
+    paginator.paginate.return_value = [{"TableNames": ["orders"]}]
+    client.get_paginator.return_value = paginator
+    client.describe_table.return_value = {
+        "Table": {
+            "TableName": "orders",
+            "TableArn": "arn:aws:dynamodb:eu-west-3:111111111111:table/orders",
+            "SSEDescription": {"Status": "ENABLED", "SSEType": "KMS"},
+        }
+    }
+    client.describe_continuous_backups.return_value = {
+        "ContinuousBackupsDescription": {
+            "PointInTimeRecoveryDescription": {
+                "PointInTimeRecoveryStatus": "DISABLED"
+            }
+        }
+    }
+
+    assets = provider._collect_dynamodb()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["point_in_time_recovery"] is False
+    assert {finding.rule_id for finding in findings} == {"DDB-001"}
+
+
+def test_cloudwatch_log_group_without_retention_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {"logGroups": [{"logGroupName": "/aws/lambda/payments", "arn": "arn:logs:payments"}]}
+    ]
+    client.get_paginator.return_value = paginator
+
+    assets = provider._collect_cloudwatch_logs()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["retention_configured"] is False
+    assert {finding.rule_id for finding in findings} == {"LOG-001"}
+
+
+def test_sqs_queue_without_encryption_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {"QueueUrls": ["https://sqs.eu-west-3.amazonaws.com/111111111111/orders"]}
+    ]
+    client.get_paginator.return_value = paginator
+    client.get_queue_attributes.return_value = {
+        "Attributes": {
+            "QueueArn": "arn:aws:sqs:eu-west-3:111111111111:orders",
+            "SqsManagedSseEnabled": "false",
+        }
+    }
+
+    assets = provider._collect_sqs()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["encrypted_at_rest"] is False
+    assert {finding.rule_id for finding in findings} == {"SQS-001"}
+
+
+def test_sns_topic_without_kms_encryption_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {"Topics": [{"TopicArn": "arn:aws:sns:eu-west-3:111111111111:fraud-alerts"}]}
+    ]
+    client.get_paginator.return_value = paginator
+    client.get_topic_attributes.return_value = {"Attributes": {}}
+
+    assets = provider._collect_sns()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["encrypted_at_rest"] is False
+    assert {finding.rule_id for finding in findings} == {"SNS-001"}
