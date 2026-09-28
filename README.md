@@ -4,7 +4,7 @@ AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discov
 
 ## Windows desktop pilot
 
-The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.5.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
+The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.6.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
 
 The desktop backend binds to `127.0.0.1` only. Electron generates a fresh random bearer token and instance nonce at each launch; the token is injected into local API requests and is not persisted in the renderer. Production API docs are disabled in the packaged application.
 
@@ -23,6 +23,7 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - Read-only Aegis security copilot grounded in current findings.
 - Hashed API tokens, viewer/operator roles and server-selected tenant identity.
 - Tenant/source-isolated findings, transactional scan persistence and durable per-tenant scan locks.
+- Finding lifecycle reconciliation with acknowledged/resolved/reopened states and analyst controls in the dashboard.
 - Windows Electron wrapper with sandboxing, navigation restrictions and CSP.
 - GitHub Actions gates for backend SQLite/PostgreSQL tests, frontend lint/test/build, secret scanning, pinned-version Semgrep SAST, IaC scanning, pinned dependency audit, Trivy and CycloneDX SBOM generation.
 - Windows workflow that builds, smoke-tests and uploads the installer plus SHA-256 checksum.
@@ -57,6 +58,12 @@ The scanner currently checks:
 - KMS: automatic rotation state for eligible customer-managed symmetric keys.
 - Lambda: public Function URLs configured with `AuthType NONE`.
 - IAM account password policy: presence and baseline properties.
+- IAM roles: direct AdministratorAccess on non-service-linked roles.
+- EC2 instances: IMDSv2 enforcement and public-IP context.
+- ECR: repository basic scan-on-push posture, with explicit enhanced-scanning caveat.
+- Secrets Manager: long-lived secrets without automatic rotation.
+- EKS: world-open public API endpoints and control-plane audit logging.
+- ALB/NLB: internet-facing load balancers without HTTPS/TLS listeners.
 - Optional multi-Region scanning: discovers enabled AWS regions and runs regional collectors in each one; mono-Region remains the default.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
