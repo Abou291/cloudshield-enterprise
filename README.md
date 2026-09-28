@@ -53,6 +53,9 @@ The scanner currently checks:
 - CloudTrail: logging state, multi-Region configuration and log-file validation.
 - GuardDuty: detector enabled/disabled state.
 - Security Hub: enabled/disabled state.
+- AWS Config: recorder presence and active-recording state.
+- KMS: automatic rotation state for eligible customer-managed symmetric keys.
+- Lambda: public Function URLs configured with `AuthType NONE`.
 - IAM account password policy: presence and baseline properties.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
