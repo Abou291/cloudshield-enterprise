@@ -199,7 +199,7 @@ rules:
     remediation: Remove the public restore attribute and share the snapshot only with explicitly approved accounts when required.
 
 
-  - id: IAM-012
+  - id: IAM-011
     name: IAM role inline policy grants unrestricted administrator access
     description: An inline role policy contains an Allow statement with wildcard Action and wildcard Resource.
     resource_type: iam_role
