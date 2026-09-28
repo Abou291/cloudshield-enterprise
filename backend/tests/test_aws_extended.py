@@ -313,3 +313,69 @@ def test_missing_backup_plan_is_flagged() -> None:
 
     assert assets[0].attributes["has_active_plan"] is False
     assert {finding.rule_id for finding in findings} == {"BAK-001"}
+
+
+def test_access_analyzer_missing_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    client.list_analyzers.return_value = {"analyzers": []}
+
+    assets = provider._collect_access_analyzer()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["enabled"] is False
+    assert {finding.rule_id for finding in findings} == {"IAM-008"}
+
+
+def test_public_ebs_snapshot_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {
+            "Snapshots": [
+                {
+                    "SnapshotId": "snap-123",
+                    "Encrypted": True,
+                }
+            ]
+        }
+    ]
+    client.get_paginator.return_value = paginator
+    client.describe_snapshot_attribute.return_value = {
+        "CreateVolumePermissions": [{"Group": "all"}]
+    }
+
+    assets = provider._collect_ebs_snapshots()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["public"] is True
+    assert {finding.rule_id for finding in findings} == {"EBS-003"}
+
+
+def test_public_rds_snapshot_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {
+            "DBSnapshots": [
+                {
+                    "DBSnapshotIdentifier": "prod-snapshot",
+                    "DBSnapshotArn": "arn:aws:rds:eu-west-3:111111111111:snapshot:prod-snapshot",
+                    "Encrypted": True,
+                }
+            ]
+        }
+    ]
+    client.get_paginator.return_value = paginator
+    client.describe_db_snapshot_attributes.return_value = {
+        "DBSnapshotAttributesResult": {
+            "DBSnapshotAttributes": [
+                {"AttributeName": "restore", "AttributeValues": ["all"]}
+            ]
+        }
+    }
+
+    assets = provider._collect_rds_snapshots()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["public"] is True
+    assert {finding.rule_id for finding in findings} == {"RDS-005"}
