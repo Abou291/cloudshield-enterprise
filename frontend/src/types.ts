@@ -1,4 +1,5 @@
 export type Severity = "critical" | "high" | "medium" | "low";
+export type FindingStatus = "open" | "acknowledged" | "resolved";
 
 export interface RiskBreakdown {
   score: number;
@@ -19,7 +20,7 @@ export interface Finding {
   region: string;
   evidence: Record<string, unknown>;
   recommendation: string;
-  status: string;
+  status: FindingStatus;
   risk: RiskBreakdown;
   last_seen_at: string;
 }
