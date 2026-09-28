@@ -379,3 +379,44 @@ def test_public_rds_snapshot_is_flagged() -> None:
 
     assert assets[0].attributes["public"] is True
     assert {finding.rule_id for finding in findings} == {"RDS-005"}
+
+
+def test_iam_role_inline_wildcard_admin_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    roles = Mock()
+    attached = Mock()
+    inline = Mock()
+    roles.paginate.return_value = [
+        {
+            "Roles": [
+                {
+                    "RoleName": "app-role",
+                    "Arn": "arn:aws:iam::111111111111:role/app-role",
+                    "Path": "/",
+                    "MaxSessionDuration": 3600,
+                }
+            ]
+        }
+    ]
+    attached.paginate.return_value = [{"AttachedPolicies": []}]
+    inline.paginate.return_value = [{"PolicyNames": ["inline-admin"]}]
+
+    def paginator(operation: str) -> Mock:
+        if operation == "list_roles":
+            return roles
+        if operation == "list_attached_role_policies":
+            return attached
+        return inline
+
+    client.get_paginator.side_effect = paginator
+    client.get_role_policy.return_value = {
+        "PolicyDocument": {
+            "Statement": [{"Effect": "Allow", "Action": ["*"], "Resource": ["*"]}]
+        }
+    }
+
+    assets = provider._collect_iam_roles()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    assert assets[0].attributes["inline_wildcard_admin"] is True
+    assert {finding.rule_id for finding in findings} == {"IAM-011"}
