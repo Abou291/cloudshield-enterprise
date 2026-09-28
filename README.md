@@ -58,7 +58,8 @@ The scanner currently checks:
 - KMS: automatic rotation state for eligible customer-managed symmetric keys.
 - Lambda: public Function URLs configured with `AuthType NONE`.
 - IAM account password policy: presence and baseline properties.
-- IAM roles: direct AdministratorAccess on non-service-linked roles.
+- IAM roles: direct AdministratorAccess and unrestricted wildcard inline policies on non-service-linked roles.
+- IAM users: AdministratorAccess inherited through groups and unrestricted wildcard inline policies.
 - EC2 instances: IMDSv2 enforcement and public-IP context.
 - ECR: repository basic scan-on-push posture, with explicit enhanced-scanning caveat.
 - Secrets Manager: long-lived secrets without automatic rotation.
