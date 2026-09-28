@@ -52,6 +52,10 @@ jobs:
               try {
                 $response = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/health"
                 if ($response.status -eq "ok") {
+                  $readiness = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/ready"
+                  if ($readiness.status -ne "ready" -or $readiness.schema_version -ne $readiness.schema_target) {
+                    throw "Packaged backend database is not ready"
+                  }
                   $scan = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8765/api/v1/scans/demo"
                   if ($scan.assets_scanned -ne 4 -or $scan.findings_count -ne 7) {
                     throw "Packaged backend demo scan returned unexpected results"
@@ -106,8 +110,11 @@ jobs:
               try {
                 $health = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/health"
                 if ($health.status -eq "ok" -and $health.instance) {
-                  $ready = $true
-                  break
+                  $readiness = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/v1/ready"
+                  if ($readiness.status -eq "ready" -and $readiness.schema_version -eq $readiness.schema_target) {
+                    $ready = $true
+                    break
+                  }
                 }
               } catch {}
             }
