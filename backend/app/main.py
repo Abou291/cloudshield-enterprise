@@ -24,7 +24,7 @@ settings = get_settings()
 production = settings.env == "production"
 app = FastAPI(
     title=settings.app_name,
-    version="0.4.0",
+    version="0.5.0",
     description="Explainable AWS cloud security posture management",
     lifespan=lifespan,
     docs_url=None if production else "/docs",
