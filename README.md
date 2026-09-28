@@ -35,7 +35,7 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 1. Install AWS CLI v2 and configure a short-lived IAM Identity Center/SSO profile on the PC.
 2. Deploy `infra/aws/aegisshield-readonly-role.yaml` in the AWS account with a unique External ID.
 3. Install AegisShield and open **Connect AWS account**.
-4. Enter the Role ARN, AWS Account ID, External ID, AWS profile name and default region.
+4. Enter the Role ARN, AWS Account ID, External ID, AWS profile name and default region. Optionally enable **Scan all enabled AWS regions**.
 5. Choose **Validate AWS role**; AegisShield performs STS AssumeRole and checks the resulting AWS Account ID.
 6. Save the connection and run an AWS scan.
 
@@ -57,6 +57,7 @@ The scanner currently checks:
 - KMS: automatic rotation state for eligible customer-managed symmetric keys.
 - Lambda: public Function URLs configured with `AuthType NONE`.
 - IAM account password policy: presence and baseline properties.
+- Optional multi-Region scanning: discovers enabled AWS regions and runs regional collectors in each one; mono-Region remains the default.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
 This coverage is intentionally narrower than a mature enterprise CSPM. A successful scan does not prove that an AWS account is secure or compliant.
