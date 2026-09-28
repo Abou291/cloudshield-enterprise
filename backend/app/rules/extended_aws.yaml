@@ -8,6 +8,8 @@ rules:
     conditions:
       - path: administrator_access
         operator: is_true
+      - path: service_linked
+        operator: is_false
     remediation: Replace AdministratorAccess with a least-privilege policy tailored to the role workload and review the trust policy.
 
   - id: EC2-001
