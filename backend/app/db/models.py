@@ -8,6 +8,14 @@ class Base(DeclarativeBase):
     pass
 
 
+class SchemaMigrationRecord(Base):
+    __tablename__ = "schema_migrations"
+
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class FindingRecord(Base):
     # V1 records have no ownership: never assign them to a tenant implicitly.
     __tablename__ = "tenant_findings"
