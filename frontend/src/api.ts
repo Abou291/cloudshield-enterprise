@@ -1,4 +1,4 @@
-import type { AssistantResponse, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, Finding, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
+import type { AssistantResponse, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, Finding, FindingStatus, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 // Intentionally memory-only: reload/logout forgets the token.
@@ -21,8 +21,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export const listFindings = (source: string, offset = 0) =>
-  request<Finding[]>(`/findings?source=${encodeURIComponent(source)}&limit=100&offset=${offset}`);
+export const listFindings = (source: string, offset = 0, includeResolved = false) =>
+  request<Finding[]>(
+    `/findings?source=${encodeURIComponent(source)}&limit=100&offset=${offset}&include_resolved=${includeResolved}`,
+  );
+
+export const updateFindingStatus = (
+  fingerprint: string,
+  source: string,
+  status: FindingStatus,
+) => request<Finding>(
+  `/findings/${encodeURIComponent(fingerprint)}/status?source=${encodeURIComponent(source)}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  },
+);
 export const getSession = () => request<Session>("/session");
 export const listScans = () => request<ScanHistory[]>("/scans");
 export const listAudit = () => request<AuditEvent[]>("/audit");

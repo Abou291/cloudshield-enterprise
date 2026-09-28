@@ -1,5 +1,7 @@
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -8,7 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import Identity, Operator
 from app.core.config import AwsConnection, get_settings
-from app.core.domain import AuditEvent, Finding, ScanHistory, ScanResult, Severity
+from app.core.domain import (
+    AuditEvent,
+    Finding,
+    FindingStatus,
+    ScanHistory,
+    ScanResult,
+    Severity,
+)
 from app.db.models import AuditRecord, ScanRecord
 from app.db.session import engine, get_db
 from app.scanners.aws import AwsInventoryProvider
@@ -63,6 +72,10 @@ class AssistantResponse(BaseModel):
 
 class RestoreBackupRequest(BaseModel):
     confirmation: str
+
+
+class FindingStatusInput(BaseModel):
+    status: FindingStatus
 
 
 @router.post("/assistant", response_model=AssistantResponse)
@@ -238,8 +251,40 @@ def list_findings(
     source: Literal["demo-fixture", "aws"] = "demo-fixture",
     limit: Limit = 100,
     offset: Offset = 0,
+    include_resolved: bool = False,
 ) -> list[Finding]:
-    return FindingRepository(db, principal.tenant_id, source).list(severity, limit, offset)
+    return FindingRepository(db, principal.tenant_id, source).list(
+        severity,
+        limit,
+        offset,
+        include_resolved,
+    )
+
+
+@router.patch("/findings/{fingerprint}/status", response_model=Finding)
+def update_finding_status(
+    fingerprint: str,
+    payload: FindingStatusInput,
+    db: DatabaseSession,
+    principal: Operator,
+    source: Literal["demo-fixture", "aws"] = "demo-fixture",
+) -> Finding:
+    repository = FindingRepository(db, principal.tenant_id, source)
+    finding = repository.set_status(fingerprint, payload.status)
+    if finding is None:
+        raise HTTPException(404, "Finding not found")
+    db.add(
+        AuditRecord(
+            event_id=str(uuid4()),
+            tenant_id=principal.tenant_id,
+            subject=principal.subject,
+            action=f"finding.{payload.status.value}",
+            object_id=fingerprint[:36],
+            timestamp=datetime.now(UTC),
+        )
+    )
+    db.commit()
+    return finding
 
 
 @router.get("/scans", response_model=list[ScanHistory])

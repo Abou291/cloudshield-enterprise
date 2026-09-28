@@ -27,3 +27,40 @@ def test_filter_findings_by_severity(client: TestClient) -> None:
     assert response.status_code == 200
     assert len(response.json()) == 2
     assert all(item["severity"] == "critical" for item in response.json())
+
+
+def test_finding_lifecycle_api_and_resolved_history(client: TestClient) -> None:
+    client.post("/api/v1/scans/demo")
+    findings = client.get("/api/v1/findings").json()
+    fingerprint = findings[0]["fingerprint"]
+
+    acknowledged = client.patch(
+        f"/api/v1/findings/{fingerprint}/status",
+        json={"status": "acknowledged"},
+    )
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["status"] == "acknowledged"
+
+    resolved = client.patch(
+        f"/api/v1/findings/{fingerprint}/status",
+        json={"status": "resolved"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["status"] == "resolved"
+
+    active = client.get("/api/v1/findings").json()
+    assert all(item["fingerprint"] != fingerprint for item in active)
+
+    history = client.get(
+        "/api/v1/findings",
+        params={"include_resolved": "true"},
+    ).json()
+    assert any(
+        item["fingerprint"] == fingerprint and item["status"] == "resolved"
+        for item in history
+    )
+
+    audit = client.get("/api/v1/audit").json()
+    actions = {item["action"] for item in audit}
+    assert "finding.acknowledged" in actions
+    assert "finding.resolved" in actions

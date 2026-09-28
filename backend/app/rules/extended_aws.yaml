@@ -1,0 +1,86 @@
+rules:
+  - id: IAM-007
+    name: IAM role has AdministratorAccess
+    description: An IAM role has the AWS managed AdministratorAccess policy attached directly.
+    resource_type: iam_role
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: administrator_access
+        operator: is_true
+      - path: service_linked
+        operator: is_false
+    remediation: Replace AdministratorAccess with a least-privilege policy tailored to the role workload and review the trust policy.
+
+  - id: EC2-001
+    name: EC2 instance does not require IMDSv2
+    description: The instance metadata service accepts requests without requiring IMDSv2 session tokens.
+    resource_type: ec2_instance
+    severity: medium
+    confidence: 0.98
+    conditions:
+      - path: metadata_endpoint_enabled
+        operator: is_true
+      - path: imdsv2_required
+        operator: is_false
+    remediation: Set HttpTokens to required after validating workload compatibility and remove unnecessary instance metadata access.
+
+  - id: ECR-001
+    name: ECR basic scan-on-push disabled
+    description: The repository does not enable ECR basic image scanning on push. Account-level enhanced scanning may provide equivalent or stronger coverage.
+    resource_type: ecr_repository
+    severity: medium
+    confidence: 0.86
+    conditions:
+      - path: scan_on_push
+        operator: is_false
+    remediation: Enable an ECR image scanning strategy, using scan-on-push or centrally managed enhanced scanning, and gate deployments on actionable findings.
+
+  - id: SEC-001
+    name: Long-lived secret has no automatic rotation
+    description: A Secrets Manager secret has automatic rotation disabled and has not changed for more than 180 days.
+    resource_type: secret
+    severity: medium
+    confidence: 0.88
+    conditions:
+      - path: rotation_enabled
+        operator: is_false
+      - path: age_since_change_days
+        operator: older_than_days
+        value: 180
+    remediation: Validate the secret lifecycle and enable rotation where the target system supports it, or document and monitor an explicit manual rotation process.
+
+  - id: EKS-001
+    name: EKS API endpoint open to the internet
+    description: The EKS control-plane public endpoint allows access from a world-routable CIDR.
+    resource_type: eks_cluster
+    severity: high
+    confidence: 0.98
+    conditions:
+      - path: public_endpoint_open_world
+        operator: is_true
+    remediation: Restrict publicAccessCidrs to controlled networks or disable public endpoint access and use private connectivity.
+
+  - id: EKS-002
+    name: EKS audit logging disabled
+    description: Kubernetes API audit events are not enabled in EKS control-plane logging.
+    resource_type: eks_cluster
+    severity: medium
+    confidence: 0.96
+    conditions:
+      - path: audit_logging_enabled
+        operator: is_false
+    remediation: Enable EKS control-plane audit logging and route logs to a monitored destination with appropriate retention.
+
+  - id: LB-001
+    name: Internet-facing load balancer has no TLS listener
+    description: An internet-facing Application or Network Load Balancer has no HTTPS or TLS listener detected.
+    resource_type: load_balancer
+    severity: high
+    confidence: 0.90
+    conditions:
+      - path: internet_facing
+        operator: is_true
+      - path: tls_listener
+        operator: is_false
+    remediation: Terminate TLS at the load balancer or document the upstream TLS termination point and enforce encrypted transport end to end.
