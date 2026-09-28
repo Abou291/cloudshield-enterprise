@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
 
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
@@ -518,4 +519,148 @@ class AwsExtendedCollectorsMixin:
                         context={"internet_exposed": public, "sensitive_data": True},
                     )
                 )
+        return assets
+
+
+    def _collect_cloudtrail_security_events(self) -> list[Asset]:
+        cloudtrail = self.client("cloudtrail")
+        suspicious_names = {
+            "StopLogging",
+            "DeleteTrail",
+            "DeleteDetector",
+            "DisableSecurityHub",
+            "StopConfigurationRecorder",
+            "CreateAccessKey",
+        }
+        now = datetime.now(UTC)
+        start_time = now - timedelta(hours=24)
+        assets: list[Asset] = []
+        token: str | None = None
+        max_pages = 4
+        for page_number in range(max_pages):
+            kwargs = {
+                "StartTime": start_time,
+                "EndTime": now,
+                "MaxResults": 50,
+            }
+            if token:
+                kwargs["NextToken"] = token
+            response = cloudtrail.lookup_events(**kwargs)
+            for event in response.get("Events", []):
+                event_name = str(event.get("EventName", ""))
+                if event_name not in suspicious_names:
+                    continue
+                detail: dict = {}
+                raw = event.get("CloudTrailEvent")
+                if isinstance(raw, str):
+                    try:
+                        parsed = json.loads(raw)
+                        if isinstance(parsed, dict):
+                            detail = parsed
+                    except json.JSONDecodeError:
+                        detail = {}
+                event_id = str(event.get("EventId") or f"{event_name}:{page_number}")
+                event_time = event.get("EventTime")
+                assets.append(
+                    Asset(
+                        resource_id=f"cloudtrail-event:{event_id}",
+                        resource_type="cloudtrail_security_event",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=event_name,
+                        attributes={
+                            "event_name": event_name,
+                            "event_source": event.get("EventSource"),
+                            "event_time": event_time.isoformat()
+                            if isinstance(event_time, datetime)
+                            else str(event_time or ""),
+                            "username": event.get("Username"),
+                            "source_ip": detail.get("sourceIPAddress"),
+                            "user_identity_arn": detail.get("userIdentity", {}).get("arn")
+                            if isinstance(detail.get("userIdentity"), dict)
+                            else None,
+                        },
+                        context={"privileged": True},
+                    )
+                )
+            token = response.get("NextToken")
+            if not token:
+                break
+        if token:
+            assets.append(
+                Asset(
+                    resource_id=f"coverage:cloudtrail-security-events:{self.region}",
+                    resource_type="coverage_gap",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name="cloudtrail-security-events",
+                    attributes={
+                        "service": "cloudtrail-security-events",
+                        "reason": "bounded_to_200_recent_events",
+                        "available": False,
+                    },
+                )
+            )
+        return assets
+
+    def _collect_guardduty_findings(self) -> list[Asset]:
+        guardduty = self.client("guardduty")
+        detector_ids = guardduty.list_detectors().get("DetectorIds", [])
+        if not detector_ids:
+            return []
+        detector_id = detector_ids[0]
+        response = guardduty.list_findings(
+            DetectorId=detector_id,
+            MaxResults=50,
+        )
+        finding_ids = response.get("FindingIds", [])
+        if not finding_ids:
+            return []
+        findings = guardduty.get_findings(
+            DetectorId=detector_id,
+            FindingIds=finding_ids,
+        ).get("Findings", [])
+        assets: list[Asset] = []
+        for finding in findings:
+            service = finding.get("Service", {})
+            if isinstance(service, dict) and service.get("Archived") is True:
+                continue
+            severity = float(finding.get("Severity", 0.0))
+            if severity < 7.0:
+                continue
+            severity_band = "critical" if severity >= 9.0 else "high"
+            finding_id = str(finding.get("Id", "unknown"))
+            assets.append(
+                Asset(
+                    resource_id=finding.get("Arn")
+                    or f"guardduty-finding:{self.region}:{finding_id}",
+                    resource_type="guardduty_active_finding",
+                    account_id=self.account_id,
+                    region=str(finding.get("Region") or self.region),
+                    name=str(finding.get("Title") or finding.get("Type") or finding_id),
+                    attributes={
+                        "finding_id": finding_id,
+                        "finding_type": finding.get("Type"),
+                        "severity_value": severity,
+                        "severity_band": severity_band,
+                        "updated_at": finding.get("UpdatedAt"),
+                    },
+                    context={"privileged": True},
+                )
+            )
+        if response.get("NextToken"):
+            assets.append(
+                Asset(
+                    resource_id=f"coverage:guardduty-findings:{self.region}",
+                    resource_type="coverage_gap",
+                    account_id=self.account_id,
+                    region=self.region,
+                    name="guardduty-findings",
+                    attributes={
+                        "service": "guardduty-findings",
+                        "reason": "bounded_to_50_findings",
+                        "available": False,
+                    },
+                )
+            )
         return assets
