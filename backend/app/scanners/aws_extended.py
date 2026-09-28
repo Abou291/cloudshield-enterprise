@@ -408,3 +408,102 @@ class AwsExtendedCollectorsMixin:
                 },
             )
         ]
+
+
+    def _collect_access_analyzer(self) -> list[Asset]:
+        analyzer = self.client("accessanalyzer")
+        analyzers: list[dict] = []
+        token: str | None = None
+        while True:
+            kwargs = {"nextToken": token} if token else {}
+            response = analyzer.list_analyzers(**kwargs)
+            analyzers.extend(response.get("analyzers", []))
+            token = response.get("nextToken")
+            if not token:
+                break
+        active = [
+            item for item in analyzers if str(item.get("status", "")).upper() == "ACTIVE"
+        ]
+        return [
+            Asset(
+                resource_id=f"access-analyzer:{self.account_id}:{self.region}",
+                resource_type="access_analyzer",
+                account_id=self.account_id,
+                region=self.region,
+                name="IAM Access Analyzer",
+                attributes={
+                    "enabled": bool(active),
+                    "active_analyzer_count": len(active),
+                    "analyzer_types": sorted(
+                        {
+                            str(item.get("type", "UNKNOWN"))
+                            for item in active
+                        }
+                    ),
+                },
+            )
+        ]
+
+    def _collect_ebs_snapshots(self) -> list[Asset]:
+        ec2 = self.client("ec2")
+        assets: list[Asset] = []
+        for page in ec2.get_paginator("describe_snapshots").paginate(OwnerIds=["self"]):
+            for snapshot in page.get("Snapshots", []):
+                snapshot_id = snapshot["SnapshotId"]
+                permissions = ec2.describe_snapshot_attribute(
+                    SnapshotId=snapshot_id,
+                    Attribute="createVolumePermission",
+                ).get("CreateVolumePermissions", [])
+                public = any(
+                    permission.get("Group") == "all" for permission in permissions
+                )
+                assets.append(
+                    Asset(
+                        resource_id=snapshot_id,
+                        resource_type="ebs_snapshot",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=snapshot_id,
+                        attributes={
+                            "public": public,
+                            "encrypted": bool(snapshot.get("Encrypted", False)),
+                        },
+                        context={"internet_exposed": public, "sensitive_data": True},
+                    )
+                )
+        return assets
+
+    def _collect_rds_snapshots(self) -> list[Asset]:
+        rds = self.client("rds")
+        assets: list[Asset] = []
+        for page in rds.get_paginator("describe_db_snapshots").paginate(
+            SnapshotType="manual"
+        ):
+            for snapshot in page.get("DBSnapshots", []):
+                identifier = snapshot["DBSnapshotIdentifier"]
+                response = rds.describe_db_snapshot_attributes(
+                    DBSnapshotIdentifier=identifier
+                )
+                attributes = response.get("DBSnapshotAttributesResult", {}).get(
+                    "DBSnapshotAttributes", []
+                )
+                public = any(
+                    item.get("AttributeName") == "restore"
+                    and "all" in item.get("AttributeValues", [])
+                    for item in attributes
+                )
+                assets.append(
+                    Asset(
+                        resource_id=snapshot.get("DBSnapshotArn") or identifier,
+                        resource_type="rds_snapshot",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=identifier,
+                        attributes={
+                            "public": public,
+                            "encrypted": bool(snapshot.get("Encrypted", False)),
+                        },
+                        context={"internet_exposed": public, "sensitive_data": True},
+                    )
+                )
+        return assets
