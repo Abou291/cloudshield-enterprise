@@ -1,6 +1,6 @@
 # AWS coverage matrix
 
-AegisShield 0.5.0 is a read-only AWS CSPM pilot. This document describes what the scanner actually observes; it is not a claim of complete AWS, CIS, ISO 27001, PCI DSS or regulatory coverage.
+AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what the scanner actually observes; it is not a claim of complete AWS, CIS, ISO 27001, PCI DSS or regulatory coverage.
 
 ## Identity
 
@@ -12,6 +12,7 @@ AegisShield 0.5.0 is a read-only AWS CSPM pilot. This document describes what th
 | IAM user key age | IAM ListAccessKeys | Active key older than 90 days |
 | Direct AdministratorAccess | IAM attached user policies | Direct administrator policy |
 | Account password policy | IAM GetAccountPasswordPolicy | Password policy missing |
+| IAM role privilege | IAM ListRoles + attached role policies | Direct AdministratorAccess on a non-service-linked role |
 
 ## Storage and data
 
@@ -24,6 +25,9 @@ AegisShield 0.5.0 is a read-only AWS CSPM pilot. This document describes what th
 | S3 server access logging | S3 logging configuration | Logging disabled |
 | EBS volume encryption | EC2 DescribeVolumes | Unencrypted volume |
 | EBS encryption by default | EC2 account setting | Default encryption disabled |
+| EC2 metadata service | EC2 DescribeInstances | IMDSv2 session tokens not required |
+| ECR repository scanning | ECR DescribeRepositories | Basic scan-on-push disabled, with enhanced-scanning caveat |
+| Secrets Manager lifecycle | Secrets Manager ListSecrets | Secret unchanged >180 days without automatic rotation |
 | RDS public accessibility | RDS DescribeDBInstances | Public database |
 | RDS storage encryption | RDS DescribeDBInstances | Encryption disabled |
 | RDS deletion protection | RDS DescribeDBInstances | Deletion protection disabled |
@@ -41,6 +45,9 @@ AegisShield 0.5.0 is a read-only AWS CSPM pilot. This document describes what th
 | GuardDuty | GuardDuty detector state | Detector disabled |
 | Security Hub | Security Hub subscription state | Hub disabled |
 | AWS Config | Recorder and recorder status | No active recorder |
+| EKS API endpoint | EKS cluster VPC config | Public control-plane endpoint open to world CIDR |
+| EKS audit logging | EKS control-plane logging config | Audit log type disabled |
+| ALB/NLB transport | ELBv2 load balancers and listeners | Internet-facing load balancer without HTTPS/TLS listener |
 
 ## Cryptography and serverless
 
@@ -48,6 +55,10 @@ AegisShield 0.5.0 is a read-only AWS CSPM pilot. This document describes what th
 | --- | --- | --- |
 | KMS customer-key rotation | KMS key metadata and rotation status | Eligible symmetric key not rotating |
 | Lambda Function URLs | Lambda URL configuration | AuthType NONE |
+
+## Finding lifecycle
+
+Successful scans reconcile current evidence against stored findings. Findings no longer observed are marked `resolved`; acknowledged findings remain acknowledged while the condition persists; and a resolved condition that reappears is reopened. Resolved history can be included explicitly from the API/dashboard.
 
 ## Failure semantics
 
