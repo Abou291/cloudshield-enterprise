@@ -57,7 +57,7 @@ The scanner uses read-only APIs. The CloudFormation onboarding role contains the
 
 ## Important limitations
 
-- Coverage is currently scoped to the configured AWS Region for regional services; IAM and S3 contain global/account-level elements.
+- Regional coverage defaults to the configured AWS Region. The operator can enable all-region scanning, which discovers enabled regions with EC2 DescribeRegions and runs regional collectors in each one. IAM and S3 contain global/account-level elements and are collected once.
 - A finding is evidence of a posture condition, not proof of exploitability.
 - Absence of a finding is not proof of security.
 - Some controls are architecture-dependent. For example, public endpoints or disabled logging can be intentional when documented and compensated elsewhere.
