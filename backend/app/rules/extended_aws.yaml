@@ -211,3 +211,100 @@ rules:
       - path: service_linked
         operator: is_false
     remediation: Replace wildcard administrator permissions with the minimum actions and resources required by the workload.
+
+
+  - id: CDR-001
+    name: CloudTrail logging was stopped
+    description: A recent CloudTrail management event stopped logging for a trail.
+    resource_type: cloudtrail_security_event
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: event_name
+        operator: equals
+        value: StopLogging
+    remediation: Verify the actor and change ticket immediately, restore required logging, and investigate activity during the visibility gap.
+
+  - id: CDR-002
+    name: CloudTrail trail was deleted
+    description: A recent CloudTrail management event deleted a trail.
+    resource_type: cloudtrail_security_event
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: event_name
+        operator: equals
+        value: DeleteTrail
+    remediation: Validate the deletion, restore required audit coverage, and investigate the initiating identity and adjacent events.
+
+  - id: CDR-003
+    name: GuardDuty detector was deleted
+    description: A recent management event deleted a GuardDuty detector.
+    resource_type: cloudtrail_security_event
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: event_name
+        operator: equals
+        value: DeleteDetector
+    remediation: Validate the actor, restore GuardDuty where required, and investigate whether the action was intended to reduce detection visibility.
+
+  - id: CDR-004
+    name: Security Hub was disabled
+    description: A recent management event disabled AWS Security Hub.
+    resource_type: cloudtrail_security_event
+    severity: high
+    confidence: 0.98
+    conditions:
+      - path: event_name
+        operator: equals
+        value: DisableSecurityHub
+    remediation: Verify authorization for the change and restore Security Hub if the account baseline requires it.
+
+  - id: CDR-005
+    name: AWS Config recorder was stopped
+    description: A recent management event stopped an AWS Config configuration recorder.
+    resource_type: cloudtrail_security_event
+    severity: high
+    confidence: 0.98
+    conditions:
+      - path: event_name
+        operator: equals
+        value: StopConfigurationRecorder
+    remediation: Verify the change, restart required recording, and review configuration changes made while recording was stopped.
+
+  - id: CDR-006
+    name: New IAM access key created
+    description: A recent management event created a long-lived IAM access key.
+    resource_type: cloudtrail_security_event
+    severity: medium
+    confidence: 0.92
+    conditions:
+      - path: event_name
+        operator: equals
+        value: CreateAccessKey
+    remediation: Confirm the key is expected, assigned to an approved identity, and necessary instead of short-lived role credentials.
+
+  - id: GD-001
+    name: Active critical GuardDuty finding
+    description: GuardDuty reports an unarchived finding with critical severity.
+    resource_type: guardduty_active_finding
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: severity_band
+        operator: equals
+        value: critical
+    remediation: Triage the GuardDuty finding immediately, preserve evidence, contain affected credentials or resources, and follow the incident response process.
+
+  - id: GD-002
+    name: Active high GuardDuty finding
+    description: GuardDuty reports an unarchived finding with high severity.
+    resource_type: guardduty_active_finding
+    severity: high
+    confidence: 0.99
+    conditions:
+      - path: severity_band
+        operator: equals
+        value: high
+    remediation: Prioritize investigation of the GuardDuty finding and validate the affected identity, workload, network activity, and recommended containment steps.
