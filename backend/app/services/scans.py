@@ -74,7 +74,13 @@ class ScanService:
             for finding in findings:
                 finding.source = self.source
             repository = FindingRepository(self.db, self.principal.tenant_id, self.source)
-            repository.reconcile(findings)
+            coverage_incomplete = any(
+                finding.rule_id == "COV-001" for finding in findings
+            )
+            if coverage_incomplete:
+                repository.upsert_many(findings)
+            else:
+                repository.reconcile(findings)
             record.status = "succeeded"
             record.assets_scanned = len(assets)
             record.findings_count = len(findings)
