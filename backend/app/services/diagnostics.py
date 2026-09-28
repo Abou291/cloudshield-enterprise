@@ -124,4 +124,5 @@ def aws_diagnostics(connection: AwsConnection) -> dict:
         "account_id": provider.account_id,
         "region": connection.region,
         "profile_name": connection.profile_name,
+        "scan_all_regions": connection.scan_all_regions,
     }
