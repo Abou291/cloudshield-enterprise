@@ -64,6 +64,7 @@ Resources:
                   - ec2:GetEbsEncryptionByDefault
                   - ec2:DescribeVpcs
                   - ec2:DescribeFlowLogs
+                  - ec2:DescribeRegions
                 Resource: "*"
               - Sid: DatabaseInventory
                 Effect: Allow
