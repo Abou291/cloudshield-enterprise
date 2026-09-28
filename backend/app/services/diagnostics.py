@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import AwsConnection, Settings
+from app.db.migrations import CURRENT_SCHEMA_VERSION, schema_version
 from app.scanners.aws import AwsInventoryProvider
 
 
@@ -70,8 +71,10 @@ def classify_aws_error(exc: Exception) -> tuple[str, str]:
 
 def base_diagnostics(db: Session, settings: Settings) -> dict:
     database_ok = True
+    current_schema = 0
     try:
         db.execute(text("SELECT 1"))
+        current_schema = schema_version(db)
     except Exception:
         database_ok = False
 
@@ -89,6 +92,9 @@ def base_diagnostics(db: Session, settings: Settings) -> dict:
         "backend": "ok",
         "database": "ok" if database_ok else "error",
         "database_engine": "sqlite" if settings.database_url.startswith("sqlite") else "postgresql",
+        "schema_version": current_schema,
+        "schema_target": CURRENT_SCHEMA_VERSION,
+        "schema_current": database_ok and current_schema == CURRENT_SCHEMA_VERSION,
         "desktop": settings.desktop_mode,
         "data_directory": data_directory,
         "backup_count": backup_count,
