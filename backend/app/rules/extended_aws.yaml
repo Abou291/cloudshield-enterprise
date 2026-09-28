@@ -163,3 +163,37 @@ rules:
       - path: has_active_plan
         operator: is_false
     remediation: Define and test a backup policy appropriate to the recovery objectives for workloads that require centralized AWS Backup protection.
+
+
+  - id: IAM-008
+    name: IAM Access Analyzer is not active
+    description: No active IAM Access Analyzer was detected in this Region.
+    resource_type: access_analyzer
+    severity: medium
+    confidence: 0.95
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: Create an IAM Access Analyzer with the intended zone of trust and review active external-access findings.
+
+  - id: EBS-003
+    name: EBS snapshot is publicly restorable
+    description: An account-owned EBS snapshot grants create-volume permission to everyone.
+    resource_type: ebs_snapshot
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: public
+        operator: is_true
+    remediation: Remove the public create-volume permission and explicitly share only with approved AWS accounts when required.
+
+  - id: RDS-005
+    name: RDS snapshot is publicly restorable
+    description: A manual RDS snapshot grants restore access to all AWS accounts.
+    resource_type: rds_snapshot
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: public
+        operator: is_true
+    remediation: Remove the public restore attribute and share the snapshot only with explicitly approved accounts when required.
