@@ -68,6 +68,9 @@ The scanner currently checks:
 - CloudWatch Logs: explicit retention configuration.
 - SQS: server-side encryption posture.
 - SNS: KMS server-side encryption posture.
+- Amazon Inspector: regional account enablement state.
+- Amazon Macie: regional service enablement state.
+- AWS Backup: presence of active backup plans.
 - Optional multi-Region scanning: discovers enabled AWS regions and runs regional collectors in each one; mono-Region remains the default.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 
