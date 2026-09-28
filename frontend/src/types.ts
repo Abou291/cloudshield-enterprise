@@ -48,6 +48,7 @@ export interface AwsConnectionInput {
   account_id: string;
   region: string;
   profile_name?: string | null;
+  scan_all_regions: boolean;
 }
 
 export interface AwsConnectionView {
@@ -55,6 +56,7 @@ export interface AwsConnectionView {
   account_id: string;
   region: string;
   profile_name?: string | null;
+  scan_all_regions: boolean;
 }
 
 export interface ScanHistory {
@@ -98,6 +100,7 @@ export interface AwsDiagnostics {
   account_id: string;
   region: string;
   profile_name: string | null;
+  scan_all_regions?: boolean;
 }
 
 export interface BackupInfo {
