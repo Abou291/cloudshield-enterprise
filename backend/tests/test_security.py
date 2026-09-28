@@ -3,13 +3,13 @@ from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.admin import recover_scan
 from app.api import router
 from app.core import auth
 from app.core.config import Settings
-from app.db.models import ScanLock, ScanRecord
+from app.db.models import ScanLock, ScanRecord, SchemaMigrationRecord
 from app.db.session import SessionLocal
 from app.services.findings import FindingRepository
 
@@ -250,3 +250,13 @@ def test_openapi_reports_current_product_version(client):
     response = client.get("/openapi.json")
     assert response.status_code == 200
     assert response.json()["info"]["version"] == "0.6.1"
+
+
+def test_readiness_fails_closed_when_schema_registry_is_missing(client):
+    assert client.get("/api/v1/ready").status_code == 200
+    with SessionLocal() as db:
+        db.execute(delete(SchemaMigrationRecord))
+        db.commit()
+    response = client.get("/api/v1/ready")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Database schema is not current"
