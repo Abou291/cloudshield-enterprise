@@ -32,6 +32,17 @@ class AwsExtendedCollectorsMixin:
                     policy.get("PolicyArn", "").endswith("/AdministratorAccess")
                     for policy in attached
                 )
+                inline_wildcard_admin = False
+                for policy_page in iam.get_paginator("list_role_policies").paginate(
+                    RoleName=role_name
+                ):
+                    for policy_name in policy_page.get("PolicyNames", []):
+                        document = iam.get_role_policy(
+                            RoleName=role_name,
+                            PolicyName=policy_name,
+                        ).get("PolicyDocument", {})
+                        if self._policy_allows_wildcard_admin(document):
+                            inline_wildcard_admin = True
                 assets.append(
                     Asset(
                         resource_id=role["Arn"],
@@ -41,6 +52,7 @@ class AwsExtendedCollectorsMixin:
                         name=role_name,
                         attributes={
                             "administrator_access": administrator,
+                            "inline_wildcard_admin": inline_wildcard_admin,
                             "max_session_duration": int(
                                 role.get("MaxSessionDuration", 3600)
                             ),
@@ -48,7 +60,7 @@ class AwsExtendedCollectorsMixin:
                                 "/aws-service-role/"
                             ),
                         },
-                        context={"privileged": administrator},
+                        context={"privileged": administrator or inline_wildcard_admin},
                     )
                 )
         return assets
