@@ -100,8 +100,11 @@ Resources:
                 Action:
                   - cloudtrail:DescribeTrails
                   - cloudtrail:GetTrailStatus
+                  - cloudtrail:LookupEvents
                   - guardduty:ListDetectors
                   - guardduty:GetDetector
+                  - guardduty:ListFindings
+                  - guardduty:GetFindings
                   - securityhub:DescribeHub
                   - config:DescribeConfigurationRecorders
                   - config:DescribeConfigurationRecorderStatus
