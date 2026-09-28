@@ -19,6 +19,7 @@ class AwsInventoryProvider:
         external_id: str | None = None,
         expected_account_id: str | None = None,
         profile_name: str | None = None,
+        scan_all_regions: bool = False,
     ) -> None:
         self.client_config = Config(
             connect_timeout=5,
@@ -43,18 +44,25 @@ class AwsInventoryProvider:
             )
         self.session = session
         self.region = region
+        self.scan_all_regions = scan_all_regions
         self.account_id = self.client("sts").get_caller_identity()["Account"]
         if expected_account_id and self.account_id != expected_account_id:
             raise ValueError("AWS identity does not match the configured account")
 
-    def client(self, service: str) -> BaseClient:
-        return self.session.client(service, config=self.client_config)
+    def client(self, service: str, region: str | None = None) -> BaseClient:
+        return self.session.client(
+            service,
+            region_name=region or self.region,
+            config=self.client_config,
+        )
 
     def collect(self) -> list[Asset]:
-        collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
+        global_collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
             ("iam", self._collect_iam),
             ("iam-password-policy", self._collect_iam_password_policy),
             ("s3", self._collect_s3),
+        ]
+        regional_collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
             ("ec2-security-groups", self._collect_security_groups),
             ("ebs", self._collect_ebs),
             ("ebs-default-encryption", self._collect_ebs_default_encryption),
@@ -68,9 +76,36 @@ class AwsInventoryProvider:
             ("lambda-function-urls", self._collect_lambda_function_urls),
         ]
         assets: list[Asset] = []
-        for service, collector in collectors:
+        for service, collector in global_collectors:
             assets.extend(self._safe_collect(service, collector))
+
+        regions = [self.region]
+        if self.scan_all_regions:
+            try:
+                regions = self._enabled_regions()
+            except (ClientError, BotoCoreError) as exc:
+                assets.extend(self._coverage_gap("region-discovery", exc))
+
+        configured_region = self.region
+        try:
+            for region in regions:
+                self.region = region
+                for service, collector in regional_collectors:
+                    assets.extend(self._safe_collect(service, collector))
+        finally:
+            self.region = configured_region
         return assets
+
+    def _enabled_regions(self) -> list[str]:
+        response = self.client("ec2").describe_regions(AllRegions=False)
+        regions = sorted(
+            {
+                item["RegionName"]
+                for item in response.get("Regions", [])
+                if item.get("RegionName")
+            }
+        )
+        return regions or [self.region]
 
     def _safe_collect(
         self,
@@ -80,19 +115,26 @@ class AwsInventoryProvider:
         try:
             return collector()
         except (ClientError, BotoCoreError) as exc:
-            reason = type(exc).__name__
-            if isinstance(exc, ClientError):
-                reason = exc.response.get("Error", {}).get("Code", "ClientError")
-            return [
-                Asset(
-                    resource_id=f"coverage:{service}",
-                    resource_type="coverage_gap",
-                    account_id=self.account_id,
-                    region=self.region,
-                    name=service,
-                    attributes={"service": service, "reason": reason, "available": False},
-                )
-            ]
+            return self._coverage_gap(service, exc)
+
+    def _coverage_gap(
+        self,
+        service: str,
+        exc: ClientError | BotoCoreError,
+    ) -> list[Asset]:
+        reason = type(exc).__name__
+        if isinstance(exc, ClientError):
+            reason = exc.response.get("Error", {}).get("Code", "ClientError")
+        return [
+            Asset(
+                resource_id=f"coverage:{service}:{self.region}",
+                resource_type="coverage_gap",
+                account_id=self.account_id,
+                region=self.region,
+                name=service,
+                attributes={"service": service, "reason": reason, "available": False},
+            )
+        ]
 
     def _collect_iam(self) -> list[Asset]:
         iam = self.client("iam")
