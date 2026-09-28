@@ -191,12 +191,12 @@ def test_s3_bucket_pagination_and_region_normalization():
         )
         stub.add_response("get_bucket_logging", {}, {"Bucket": "sample-bucket"})
         stub.add_response(
+            "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
+        )
+        stub.add_response(
             "get_bucket_versioning",
             {"Status": "Enabled"},
             {"Bucket": "sample-bucket"},
-        )
-        stub.add_response(
-            "get_bucket_location", {"LocationConstraint": "EU"}, {"Bucket": "sample-bucket"}
         )
         stub.add_response(
             "get_public_access_block",
