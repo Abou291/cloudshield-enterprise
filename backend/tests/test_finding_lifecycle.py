@@ -1,6 +1,8 @@
-from app.core.domain import Finding, FindingStatus, RiskBreakdown, Severity
+from app.core.auth import Principal
+from app.core.domain import Asset, Finding, FindingStatus, RiskBreakdown, Severity
 from app.db.session import SessionLocal
 from app.services.findings import FindingRepository
+from app.services.scans import ScanService
 
 
 def sample_finding(fingerprint: str = "a" * 64) -> Finding:
@@ -70,3 +72,46 @@ def test_status_update_is_source_and_tenant_scoped() -> None:
             finding.fingerprint,
             FindingStatus.RESOLVED,
         ) is None
+
+
+class CoverageGapProvider:
+    def collect(self) -> list[Asset]:
+        return [
+            Asset(
+                resource_id="coverage:eks:eu-west-3",
+                resource_type="coverage_gap",
+                account_id="111111111111",
+                region="eu-west-3",
+                name="eks",
+                attributes={
+                    "service": "eks",
+                    "reason": "AccessDenied",
+                    "available": False,
+                },
+            )
+        ]
+
+
+def test_incomplete_coverage_does_not_auto_resolve_previous_findings() -> None:
+    with SessionLocal() as db:
+        repository = FindingRepository(db, "tenant-a", "aws")
+        finding = sample_finding()
+        repository.reconcile([finding])
+        db.commit()
+
+        service = ScanService(
+            db,
+            CoverageGapProvider,
+            "aws",
+            Principal(
+                tenant_id="tenant-a",
+                subject="tester",
+                role="operator",
+            ),
+        )
+        result = service.run()
+
+        assert any(item.rule_id == "COV-001" for item in result.findings)
+        current = repository.list()
+        assert any(item.fingerprint == finding.fingerprint for item in current)
+        assert any(item.rule_id == "COV-001" for item in current)
