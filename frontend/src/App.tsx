@@ -26,8 +26,8 @@ function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const update = (
-    field: keyof AwsConnectionInput,
-    value: string | boolean,
+    field: Exclude<keyof AwsConnectionInput, "scan_all_regions">,
+    value: string,
   ) => setConnection((current) => ({ ...current, [field]: value }));
   const validate = async () => {
     setBusy(true); setMessage(null);
@@ -51,7 +51,10 @@ function AwsConnectionSetup({ onDone }: { onDone: () => void }) {
       <label>Default region<input required value={connection.region} onChange={(event) => update("region", event.target.value)} placeholder="eu-west-3" /></label>
       <label className="checkbox-row">
         <input type="checkbox" checked={connection.scan_all_regions}
-          onChange={(event) => update("scan_all_regions", event.target.checked)} />
+          onChange={(event) => setConnection((current) => ({
+            ...current,
+            scan_all_regions: event.target.checked,
+          }))} />
         <span>Scan all enabled AWS regions</span>
       </label>
       <small>When enabled, AegisShield discovers enabled regions and runs regional posture checks in each one.</small>
