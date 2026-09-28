@@ -388,3 +388,86 @@ def test_securityhub_not_subscribed_collected_as_disabled():
         stub.assert_no_pending_responses()
     assert assets[0].resource_type == "securityhub"
     assert assets[0].attributes["enabled"] is False
+
+
+def test_config_without_recorder_collected_as_disabled():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    client = Mock()
+    client.describe_configuration_recorders.return_value = {
+        "ConfigurationRecorders": []
+    }
+    client.describe_configuration_recorder_status.return_value = {
+        "ConfigurationRecordersStatus": []
+    }
+    provider.client = Mock(return_value=client)
+    assets = provider._collect_config()
+    assert assets[0].resource_type == "aws_config_recorder"
+    assert assets[0].attributes["recording"] is False
+
+
+def test_customer_kms_key_without_rotation_collected():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    client = Mock()
+    paginator = Mock()
+    paginator.paginate.return_value = [
+        {"Keys": [{"KeyId": "key-1", "KeyArn": "arn:aws:kms:eu-west-3:111111111111:key/key-1"}]}
+    ]
+    client.get_paginator.return_value = paginator
+    client.describe_key.return_value = {
+        "KeyMetadata": {
+            "KeyId": "key-1",
+            "Arn": "arn:aws:kms:eu-west-3:111111111111:key/key-1",
+            "KeyManager": "CUSTOMER",
+            "KeyState": "Enabled",
+            "KeySpec": "SYMMETRIC_DEFAULT",
+        }
+    }
+    client.get_key_rotation_status.return_value = {"KeyRotationEnabled": False}
+    provider.client = Mock(return_value=client)
+    assets = provider._collect_kms()
+    assert assets[0].resource_type == "kms_key"
+    assert assets[0].attributes["rotation_supported"] is True
+    assert assets[0].attributes["rotation_enabled"] is False
+
+
+def test_public_lambda_function_url_collected():
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    client = Mock()
+    functions = Mock()
+    urls = Mock()
+    functions.paginate.return_value = [
+        {
+            "Functions": [
+                {
+                    "FunctionName": "public-api",
+                    "FunctionArn": "arn:aws:lambda:eu-west-3:111111111111:function:public-api",
+                }
+            ]
+        }
+    ]
+    urls.paginate.return_value = [
+        {
+            "FunctionUrlConfigs": [
+                {
+                    "FunctionUrl": "https://example.lambda-url.eu-west-3.on.aws/",
+                    "FunctionArn": "arn:aws:lambda:eu-west-3:111111111111:function:public-api",
+                    "AuthType": "NONE",
+                }
+            ]
+        }
+    ]
+
+    def paginator_for(operation):
+        return functions if operation == "list_functions" else urls
+
+    client.get_paginator.side_effect = paginator_for
+    provider.client = Mock(return_value=client)
+    assets = provider._collect_lambda_function_urls()
+    assert assets[0].resource_type == "lambda_function_url"
+    assert assets[0].attributes["public_without_auth"] is True
