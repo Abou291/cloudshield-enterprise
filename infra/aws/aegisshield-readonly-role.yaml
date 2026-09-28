@@ -44,6 +44,8 @@ Resources:
                   - iam:ListMFADevices
                   - iam:ListAccessKeys
                   - iam:ListAttachedUserPolicies
+                  - iam:ListRoles
+                  - iam:ListAttachedRolePolicies
                 Resource: "*"
               - Sid: StorageInventory
                 Effect: Allow
@@ -65,11 +67,22 @@ Resources:
                   - ec2:DescribeVpcs
                   - ec2:DescribeFlowLogs
                   - ec2:DescribeRegions
+                  - ec2:DescribeInstances
                 Resource: "*"
               - Sid: DatabaseInventory
                 Effect: Allow
                 Action:
                   - rds:DescribeDBInstances
+                Resource: "*"
+              - Sid: ContainerAndSecretsInventory
+                Effect: Allow
+                Action:
+                  - ecr:DescribeRepositories
+                  - secretsmanager:ListSecrets
+                  - eks:ListClusters
+                  - eks:DescribeCluster
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeListeners
                 Resource: "*"
               - Sid: AuditAndDetectionInventory
                 Effect: Allow
