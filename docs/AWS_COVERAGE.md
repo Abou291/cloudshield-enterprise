@@ -12,7 +12,9 @@ AegisShield 0.7.0 is a read-only AWS CSPM pilot. This document describes what th
 | IAM user key age | IAM ListAccessKeys | Active key older than 90 days |
 | Direct AdministratorAccess | IAM attached user policies | Direct administrator policy |
 | Account password policy | IAM GetAccountPasswordPolicy | Password policy missing |
-| IAM role privilege | IAM ListRoles + attached role policies | Direct AdministratorAccess on a non-service-linked role |
+| IAM role privilege | IAM ListRoles + attached/inline role policies | Direct AdministratorAccess or unrestricted wildcard inline policy on a non-service-linked role |
+| IAM group inheritance | IAM user groups + attached group policies | AdministratorAccess inherited through a group |
+| IAM user inline privilege | IAM inline user policies | Allow wildcard Action on wildcard Resource |
 
 ## Storage and data
 
