@@ -129,3 +129,37 @@ rules:
       - path: encrypted_at_rest
         operator: is_false
     remediation: Configure SNS server-side encryption with an appropriate KMS key and validate publisher/subscriber permissions.
+
+
+  - id: DET-001
+    name: Amazon Inspector is not enabled
+    description: Amazon Inspector does not report an enabled account state in this Region.
+    resource_type: inspector_account
+    severity: medium
+    confidence: 0.96
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: Enable Amazon Inspector for the workload types in scope and route actionable findings into the incident workflow.
+
+  - id: DET-002
+    name: Amazon Macie is not enabled
+    description: Amazon Macie does not report an enabled session in this Region.
+    resource_type: macie_account
+    severity: low
+    confidence: 0.94
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: If sensitive data discovery is required for this environment, enable Macie and define a reviewed findings workflow.
+
+  - id: BAK-001
+    name: No active AWS Backup plan detected
+    description: AWS Backup reports no active backup plan in this Region.
+    resource_type: backup_account
+    severity: medium
+    confidence: 0.90
+    conditions:
+      - path: has_active_plan
+        operator: is_false
+    remediation: Define and test a backup policy appropriate to the recovery objectives for workloads that require centralized AWS Backup protection.
