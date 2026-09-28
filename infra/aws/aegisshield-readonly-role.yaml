@@ -78,6 +78,13 @@ Resources:
                   - guardduty:ListDetectors
                   - guardduty:GetDetector
                   - securityhub:DescribeHub
+                  - config:DescribeConfigurationRecorders
+                  - config:DescribeConfigurationRecorderStatus
+                  - kms:ListKeys
+                  - kms:DescribeKey
+                  - kms:GetKeyRotationStatus
+                  - lambda:ListFunctions
+                  - lambda:ListFunctionUrlConfigs
                 Resource: "*"
 
 Outputs:
