@@ -24,6 +24,7 @@ from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
 from app.services.assistant import ask_llm
 from app.services.backup import DesktopBackupService
+from app.services.coverage import build_coverage_summary
 from app.services.desktop_connection import DesktopConnectionStore
 from app.services.diagnostics import (
     aws_diagnostics,
@@ -240,6 +241,27 @@ def security_report(
         )
     )
     return build_security_report(principal.tenant_id, source, findings, scans)
+
+
+@router.get("/coverage")
+def coverage_summary(
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> dict:
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    scans = list(
+        db.scalars(
+            select(ScanRecord)
+            .where(
+                ScanRecord.tenant_id == principal.tenant_id,
+                ScanRecord.source == source,
+            )
+            .order_by(ScanRecord.started_at.desc(), ScanRecord.scan_id)
+            .limit(100)
+        )
+    )
+    return build_coverage_summary(findings, scans, source)
 
 
 @router.get("/executive-summary")
