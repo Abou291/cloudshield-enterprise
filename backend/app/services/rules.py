@@ -104,6 +104,10 @@ class RuleEngine:
                     evidence["to_port"] = asset.attributes.get(
                         "to_port", asset.attributes.get("from_port")
                     )
+                if asset.resource_type == "coverage_gap":
+                    for key in ("service", "reason", "available"):
+                        if key in asset.attributes:
+                            evidence[key] = asset.attributes[key]
                 fingerprint = hashlib.sha256(
                     f"{asset.account_id}|{asset.region}|{asset.resource_id}|{rule.id}".encode()
                 ).hexdigest()
