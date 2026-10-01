@@ -1,4 +1,4 @@
-import type { AssistantResponse, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, Finding, FindingStatus, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
+import type { AssistantResponse, AttackPath, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, ExecutiveSummary, Finding, FindingStatus, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 // Intentionally memory-only: reload/logout forgets the token.
@@ -65,3 +65,10 @@ export const restoreLatestBackup = () => request<BackupInfo>("/backups/restore-l
 });
 export const getSecurityReport = (source: string) =>
   request<SecurityReport>(`/reports/security?source=${encodeURIComponent(source)}`);
+
+
+export const getExecutiveSummary = (source: string) =>
+  request<ExecutiveSummary>(`/executive-summary?source=${encodeURIComponent(source)}`);
+
+export const getAttackPaths = (source: string) =>
+  request<AttackPath[]>(`/attack-paths?source=${encodeURIComponent(source)}`);
