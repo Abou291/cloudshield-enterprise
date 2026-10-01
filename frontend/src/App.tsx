@@ -5,6 +5,7 @@ import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, 
 import AccessGate from "./AccessGate";
 import DiagnosticsPanel from "./DiagnosticsPanel";
 import SecurityCopilot from "./SecurityCopilot";
+import RiskIntelligencePanel from "./RiskIntelligencePanel";
 import type { AuditEvent, AwsConnectionInput, Finding, ScanHistory, Session, Severity } from "./types";
 import "./styles.css";
 
@@ -220,6 +221,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
             </article>
           ))}
         </section>
+
+        <RiskIntelligencePanel source={source} revision={revision} />
 
         <section className="panel" id="findings">
           <div className="panel-title">
