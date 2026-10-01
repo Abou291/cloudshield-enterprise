@@ -14,7 +14,7 @@ def test_diagnostics_and_security_report(client):
     report = client.get("/api/v1/reports/security?source=demo-fixture")
     assert report.status_code == 200
     body = report.json()
-    assert body["schema"] == "aegisshield.security-report.v1"
+    assert body["schema"] == "aegisshield.security-report.v2"
     assert body["summary"]["findings"] == 7
     assert body["summary"]["highest_risk"] is not None
     assert len(body["integrity_sha256"]) == 64
