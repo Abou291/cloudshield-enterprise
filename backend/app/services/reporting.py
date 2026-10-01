@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 from app.core.domain import Finding, FindingStatus, ScanHistory
+from app.services.coverage import build_coverage_summary
 
 
 def _candidate_id(kind: str, findings: list[Finding]) -> str:
@@ -217,6 +218,7 @@ def build_security_report(
             ),
         },
         "executive_summary": build_executive_summary(findings),
+        "coverage": build_coverage_summary(findings, scans, source),
         "attack_paths": build_attack_paths(findings),
         "findings": [item.model_dump(mode="json") for item in findings],
     }
