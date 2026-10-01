@@ -129,3 +129,53 @@ export interface SecurityReport {
   };
   findings: Finding[];
 }
+
+
+export interface AttackPathStep {
+  finding_fingerprint: string;
+  rule_id: string;
+  title: string;
+  resource_id: string;
+  resource_type: string;
+  region: string;
+  risk_score: number;
+}
+
+export interface AttackPath {
+  path_id: string;
+  kind: string;
+  title: string;
+  account_id: string;
+  severity: "critical" | "high";
+  score: number;
+  confidence: "candidate";
+  rationale: string;
+  caveat: string;
+  steps: AttackPathStep[];
+  remediation: string;
+}
+
+export interface ExecutiveSummary {
+  findings: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  highest_risk: number | null;
+  accounts_affected: number;
+  regions_affected: number;
+  internet_exposed: number;
+  privileged: number;
+  sensitive_data: number;
+  attack_path_candidates: number;
+  top_risks: Array<{
+    fingerprint: string;
+    rule_id: string;
+    title: string;
+    resource_id: string;
+    account_id: string;
+    region: string;
+    severity: Severity;
+    risk_score: number;
+  }>;
+}
