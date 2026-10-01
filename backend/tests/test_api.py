@@ -64,3 +64,32 @@ def test_finding_lifecycle_api_and_resolved_history(client: TestClient) -> None:
     actions = {item["action"] for item in audit}
     assert "finding.acknowledged" in actions
     assert "finding.resolved" in actions
+
+
+
+def test_risk_intelligence_endpoints_correlate_demo_findings(client: TestClient) -> None:
+    client.post("/api/v1/scans/demo")
+
+    summary = client.get(
+        "/api/v1/executive-summary",
+        params={"source": "demo-fixture"},
+    )
+    paths = client.get(
+        "/api/v1/attack-paths",
+        params={"source": "demo-fixture"},
+    )
+
+    assert summary.status_code == 200
+    payload = summary.json()
+    assert payload["findings"] == 7
+    assert payload["critical"] == 2
+    assert payload["internet_exposed"] >= 1
+    assert payload["privileged"] >= 1
+    assert payload["attack_path_candidates"] >= 2
+
+    assert paths.status_code == 200
+    path_payload = paths.json()
+    assert len(path_payload) >= 2
+    assert all(item["confidence"] == "candidate" for item in path_payload)
+    assert all("does not prove" in item["caveat"] for item in path_payload)
+    assert any(item["kind"] == "exposure-to-privilege" for item in path_payload)
