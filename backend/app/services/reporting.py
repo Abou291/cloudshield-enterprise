@@ -59,6 +59,7 @@ def build_attack_paths(findings: list[Finding]) -> list[dict]:
             rationale: str,
             remediation: str,
             chain: list[Finding],
+            candidate_account_id: str = account_id,
         ) -> None:
             unique = list({item.fingerprint: item for item in chain}.values())
             if len(unique) < 2:
@@ -70,7 +71,7 @@ def build_attack_paths(findings: list[Finding]) -> list[dict]:
                     "path_id": _candidate_id(kind, unique),
                     "kind": kind,
                     "title": title,
-                    "account_id": account_id,
+                    "account_id": candidate_account_id,
                     "severity": "critical" if score >= 90 else "high",
                     "score": score,
                     "confidence": "candidate",
