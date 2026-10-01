@@ -4,7 +4,7 @@ AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discov
 
 ## Windows desktop pilot
 
-The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.6.1.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
+The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.7.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
 
 The desktop backend binds to `127.0.0.1` only. Electron generates a fresh random bearer token and instance nonce at each launch; the token is injected into local API requests and is not persisted in the renderer. Production API docs are disabled in the packaged application.
 
@@ -18,6 +18,7 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - AWS STS AssumeRole with External ID, expected account binding and named AWS CLI/IAM Identity Center profile support.
 - Declarative rules for IAM, S3 and network exposure.
 - Explainable 0–100 contextual risk scoring.
+- Executive risk intelligence with conservative cross-finding attack-path candidates.
 - SQLite desktop persistence or PostgreSQL through Docker Compose.
 - React/TypeScript dashboard with findings, scan history and audit trail.
 - Read-only Aegis security copilot grounded in current findings.

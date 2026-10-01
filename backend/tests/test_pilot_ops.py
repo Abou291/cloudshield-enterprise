@@ -8,13 +8,13 @@ def test_diagnostics_and_security_report(client):
     assert diagnostics.status_code == 200
     assert diagnostics.json()["backend"] == "ok"
     assert diagnostics.json()["database"] == "ok"
-    assert diagnostics.json()["version"] == "0.6.1"
+    assert diagnostics.json()["version"] == "0.7.0"
 
     client.post("/api/v1/scans/demo")
     report = client.get("/api/v1/reports/security?source=demo-fixture")
     assert report.status_code == 200
     body = report.json()
-    assert body["schema"] == "aegisshield.security-report.v1"
+    assert body["schema"] == "aegisshield.security-report.v2"
     assert body["summary"]["findings"] == 7
     assert body["summary"]["highest_risk"] is not None
     assert len(body["integrity_sha256"]) == 64

@@ -31,7 +31,11 @@ from app.services.diagnostics import (
     classify_aws_error,
 )
 from app.services.findings import FindingRepository
-from app.services.reporting import build_security_report
+from app.services.reporting import (
+    build_attack_paths,
+    build_executive_summary,
+    build_security_report,
+)
 from app.services.scans import ScanBusyError, ScanFailedError, ScanService
 
 router = APIRouter(prefix="/api/v1")
@@ -236,6 +240,26 @@ def security_report(
         )
     )
     return build_security_report(principal.tenant_id, source, findings, scans)
+
+
+@router.get("/executive-summary")
+def executive_summary(
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> dict:
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    return build_executive_summary(findings)
+
+
+@router.get("/attack-paths")
+def attack_paths(
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> list[dict]:
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    return build_attack_paths(findings)
 
 
 @router.get("/health")
