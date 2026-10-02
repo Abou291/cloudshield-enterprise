@@ -127,11 +127,23 @@ def test_iam_pagination_and_inactive_keys():
             },
             {"UserName": "alice", "Marker": "next-page"},
         )
+        stub.add_response(
+            "list_groups_for_user",
+            {"Groups": [], "IsTruncated": False},
+            {"UserName": "alice"},
+        )
+        stub.add_response(
+            "list_user_policies",
+            {"PolicyNames": [], "IsTruncated": False},
+            {"UserName": "alice"},
+        )
         assets = provider._collect_iam()
         stub.assert_no_pending_responses()
     assert assets[0].resource_type == "iam_account"
     assert assets[0].attributes["root_mfa_enabled"] is True
     assert assets[1].attributes["administrator_access"] is True
+    assert assets[1].attributes["group_administrator_access"] is False
+    assert assets[1].attributes["inline_wildcard_admin"] is False
     assert assets[1].attributes["oldest_access_key_days"] == 0
 
 
@@ -181,6 +193,22 @@ def test_s3_bucket_pagination_and_region_normalization():
             {"Bucket": "sample-bucket"},
         )
         stub.add_response(
+            "get_bucket_acl",
+            {
+                "Owner": {"ID": "owner"},
+                "Grants": [
+                    {
+                        "Grantee": {
+                            "Type": "CanonicalUser",
+                            "ID": "owner",
+                        },
+                        "Permission": "FULL_CONTROL",
+                    }
+                ],
+            },
+            {"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
             "get_bucket_encryption",
             {
                 "ServerSideEncryptionConfiguration": {
@@ -216,6 +244,8 @@ def test_s3_bucket_pagination_and_region_normalization():
     assert assets[0].region == "eu-west-1"
     assert assets[0].attributes == {
         "public": True,
+        "public_policy": True,
+        "public_acl": False,
         "encrypted": True,
         "logging_enabled": False,
         "versioning_enabled": True,
@@ -516,6 +546,16 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
         "_collect_secrets_manager",
         "_collect_eks",
         "_collect_load_balancers",
+        "_collect_dynamodb",
+        "_collect_cloudwatch_logs",
+        "_collect_sqs",
+        "_collect_sns",
+        "_collect_inspector2",
+        "_collect_macie",
+        "_collect_backup",
+        "_collect_access_analyzer",
+        "_collect_ebs_snapshots",
+        "_collect_rds_snapshots",
     ]
     for name in regional_names:
         setattr(provider, name, Mock(return_value=[]))
@@ -528,3 +568,87 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
     for name in regional_names:
         assert getattr(provider, name).call_count == 2
     assert provider.region == "eu-west-3"
+
+
+def test_wildcard_policy_detector_requires_allow_action_and_resource() -> None:
+    assert AwsInventoryProvider._policy_allows_wildcard_admin(
+        {"Statement": {"Effect": "Allow", "Action": "*", "Resource": "*"}}
+    )
+    assert not AwsInventoryProvider._policy_allows_wildcard_admin(
+        {"Statement": {"Effect": "Deny", "Action": "*", "Resource": "*"}}
+    )
+    assert not AwsInventoryProvider._policy_allows_wildcard_admin(
+        {"Statement": {"Effect": "Allow", "Action": "s3:GetObject", "Resource": "*"}}
+    )
+
+
+def test_iam_user_group_and_inline_admin_are_flagged() -> None:
+    provider = AwsInventoryProvider.__new__(AwsInventoryProvider)
+    provider.account_id = "111111111111"
+    provider.region = "eu-west-3"
+    iam = Mock()
+    provider.client = Mock(return_value=iam)
+
+    paginators = {}
+    for operation in [
+        "list_users",
+        "list_mfa_devices",
+        "list_access_keys",
+        "list_attached_user_policies",
+        "list_groups_for_user",
+        "list_attached_group_policies",
+        "list_user_policies",
+    ]:
+        paginators[operation] = Mock()
+    paginators["list_users"].paginate.return_value = Mock(
+        search=Mock(
+            return_value=[
+                {
+                    "UserName": "alice",
+                    "Arn": "arn:aws:iam::111111111111:user/alice",
+                }
+            ]
+        )
+    )
+    paginators["list_mfa_devices"].paginate.return_value = [
+        {"MFADevices": [{"SerialNumber": "mfa"}]}
+    ]
+    paginators["list_access_keys"].paginate.return_value = [
+        {"AccessKeyMetadata": []}
+    ]
+    paginators["list_attached_user_policies"].paginate.return_value = [
+        {"AttachedPolicies": []}
+    ]
+    paginators["list_groups_for_user"].paginate.return_value = [
+        {"Groups": [{"GroupName": "admins"}]}
+    ]
+    paginators["list_attached_group_policies"].paginate.return_value = [
+        {
+            "AttachedPolicies": [
+                {
+                    "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess",
+                    "PolicyName": "AdministratorAccess",
+                }
+            ]
+        }
+    ]
+    paginators["list_user_policies"].paginate.return_value = [
+        {"PolicyNames": ["inline-admin"]}
+    ]
+    iam.get_paginator.side_effect = lambda operation: paginators[operation]
+    iam.get_account_summary.return_value = {
+        "SummaryMap": {"AccountMFAEnabled": 1, "AccountAccessKeysPresent": 0}
+    }
+    iam.get_user_policy.return_value = {
+        "PolicyDocument": {
+            "Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}]
+        }
+    }
+
+    assets = provider._collect_iam()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+
+    user = next(asset for asset in assets if asset.resource_type == "iam_user")
+    assert user.attributes["group_administrator_access"] is True
+    assert user.attributes["inline_wildcard_admin"] is True
+    assert {"IAM-009", "IAM-010"} <= {finding.rule_id for finding in findings}

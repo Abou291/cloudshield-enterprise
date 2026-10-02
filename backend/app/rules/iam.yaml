@@ -33,3 +33,26 @@ rules:
         value: 90
     remediation: Disable and rotate the key, then migrate the workload to short-lived role credentials.
 
+
+
+  - id: IAM-009
+    name: IAM user inherits AdministratorAccess from a group
+    description: The IAM user belongs to a group with the AWS-managed AdministratorAccess policy attached.
+    resource_type: iam_user
+    severity: critical
+    confidence: 0.98
+    conditions:
+      - path: group_administrator_access
+        operator: is_true
+    remediation: Remove broad group-level administrator access and replace it with task-specific roles and short-lived federation.
+
+  - id: IAM-010
+    name: IAM user inline policy grants unrestricted administrator access
+    description: An inline user policy contains an Allow statement with wildcard Action and wildcard Resource.
+    resource_type: iam_user
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: inline_wildcard_admin
+        operator: is_true
+    remediation: Replace the wildcard inline policy with least-privilege permissions and prefer role-based short-lived access.

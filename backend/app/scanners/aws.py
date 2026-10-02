@@ -81,6 +81,16 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("secrets-manager", self._collect_secrets_manager),
             ("eks", self._collect_eks),
             ("load-balancers", self._collect_load_balancers),
+            ("dynamodb", self._collect_dynamodb),
+            ("cloudwatch-logs", self._collect_cloudwatch_logs),
+            ("sqs", self._collect_sqs),
+            ("sns", self._collect_sns),
+            ("inspector2", self._collect_inspector2),
+            ("macie", self._collect_macie),
+            ("aws-backup", self._collect_backup),
+            ("access-analyzer", self._collect_access_analyzer),
+            ("ebs-snapshots", self._collect_ebs_snapshots),
+            ("rds-snapshots", self._collect_rds_snapshots),
         ]
         assets: list[Asset] = []
         for service, collector in global_collectors:
@@ -196,6 +206,37 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                 policy["PolicyArn"].endswith("/AdministratorAccess")
                 for policy in attached
             )
+            group_administrator = False
+            for group_page in iam.get_paginator("list_groups_for_user").paginate(
+                UserName=username
+            ):
+                for group in group_page.get("Groups", []):
+                    group_name = group["GroupName"]
+                    group_policies = (
+                        policy
+                        for policy_page in iam.get_paginator(
+                            "list_attached_group_policies"
+                        ).paginate(GroupName=group_name)
+                        for policy in policy_page.get("AttachedPolicies", [])
+                    )
+                    if any(
+                        policy.get("PolicyArn", "").endswith("/AdministratorAccess")
+                        for policy in group_policies
+                    ):
+                        group_administrator = True
+
+            inline_wildcard_admin = False
+            for policy_page in iam.get_paginator("list_user_policies").paginate(
+                UserName=username
+            ):
+                for policy_name in policy_page.get("PolicyNames", []):
+                    document = iam.get_user_policy(
+                        UserName=username,
+                        PolicyName=policy_name,
+                    ).get("PolicyDocument", {})
+                    if self._policy_allows_wildcard_admin(document):
+                        inline_wildcard_admin = True
+
             assets.append(
                 Asset(
                     resource_id=user["Arn"],
@@ -207,11 +248,35 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                         "mfa_enabled": mfa_enabled,
                         "oldest_access_key_days": oldest_key_days,
                         "administrator_access": administrator,
+                        "group_administrator_access": group_administrator,
+                        "inline_wildcard_admin": inline_wildcard_admin,
                     },
-                    context={"privileged": administrator},
+                    context={
+                        "privileged": administrator
+                        or group_administrator
+                        or inline_wildcard_admin
+                    },
                 )
             )
         return assets
+
+    @staticmethod
+    def _policy_allows_wildcard_admin(document: dict) -> bool:
+        statements = document.get("Statement", [])
+        if isinstance(statements, dict):
+            statements = [statements]
+        for statement in statements:
+            if not isinstance(statement, dict) or statement.get("Effect") != "Allow":
+                continue
+            actions = statement.get("Action", [])
+            resources = statement.get("Resource", [])
+            if isinstance(actions, str):
+                actions = [actions]
+            if isinstance(resources, str):
+                resources = [resources]
+            if "*" in actions and "*" in resources:
+                return True
+        return False
 
     def _collect_iam_password_policy(self) -> list[Asset]:
         iam = self.client("iam")
@@ -252,7 +317,9 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
         )
         for bucket in buckets:
             name = bucket["Name"]
-            public = self._bucket_public(s3, name)
+            policy_public = self._bucket_public(s3, name)
+            public_acl = self._bucket_public_acl(s3, name)
+            public = policy_public or public_acl
             encrypted = self._bucket_encrypted(s3, name)
             logging = bool(s3.get_bucket_logging(Bucket=name).get("LoggingEnabled"))
             assets.append(
@@ -264,6 +331,8 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                     name=name,
                     attributes={
                         "public": public,
+                        "public_policy": policy_public,
+                        "public_acl": public_acl,
                         "encrypted": encrypted,
                         "logging_enabled": logging,
                         "versioning_enabled": self._bucket_versioning_enabled(s3, name),
@@ -646,6 +715,18 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             if exc.response.get("Error", {}).get("Code") == "NoSuchBucketPolicy":
                 return False
             raise
+
+    @staticmethod
+    def _bucket_public_acl(s3: BaseClient, name: str) -> bool:
+        response = s3.get_bucket_acl(Bucket=name)
+        public_uris = {
+            "http://acs.amazonaws.com/groups/global/AllUsers",
+            "http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
+        }
+        return any(
+            grant.get("Grantee", {}).get("URI") in public_uris
+            for grant in response.get("Grants", [])
+        )
 
     @staticmethod
     def _bucket_encrypted(s3: BaseClient, name: str) -> bool:
