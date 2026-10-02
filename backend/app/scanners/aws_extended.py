@@ -215,3 +215,116 @@ class AwsExtendedCollectorsMixin:
                     )
                 )
         return assets
+
+
+    def _collect_dynamodb(self) -> list[Asset]:
+        dynamodb = self.client("dynamodb")
+        assets: list[Asset] = []
+        for page in dynamodb.get_paginator("list_tables").paginate():
+            for table_name in page.get("TableNames", []):
+                table = dynamodb.describe_table(TableName=table_name).get("Table", {})
+                backups = dynamodb.describe_continuous_backups(TableName=table_name)
+                pitr = (
+                    backups.get("ContinuousBackupsDescription", {})
+                    .get("PointInTimeRecoveryDescription", {})
+                    .get("PointInTimeRecoveryStatus")
+                    == "ENABLED"
+                )
+                sse = table.get("SSEDescription", {})
+                assets.append(
+                    Asset(
+                        resource_id=table.get("TableArn")
+                        or f"dynamodb:{self.region}:{table_name}",
+                        resource_type="dynamodb_table",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=table_name,
+                        attributes={
+                            "point_in_time_recovery": pitr,
+                            "sse_status": sse.get("Status", "ENABLED"),
+                            "kms_managed": sse.get("SSEType") == "KMS",
+                        },
+                        context={"sensitive_data": True},
+                    )
+                )
+        return assets
+
+    def _collect_cloudwatch_logs(self) -> list[Asset]:
+        logs = self.client("logs")
+        assets: list[Asset] = []
+        for page in logs.get_paginator("describe_log_groups").paginate():
+            for group in page.get("logGroups", []):
+                name = group["logGroupName"]
+                assets.append(
+                    Asset(
+                        resource_id=group.get("arn")
+                        or f"logs:{self.region}:{name}",
+                        resource_type="cloudwatch_log_group",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=name,
+                        attributes={
+                            "retention_configured": "retentionInDays" in group,
+                            "retention_days": int(group.get("retentionInDays", 0)),
+                            "customer_kms_key": bool(group.get("kmsKeyId")),
+                        },
+                        context={"sensitive_data": True},
+                    )
+                )
+        return assets
+
+    def _collect_sqs(self) -> list[Asset]:
+        sqs = self.client("sqs")
+        assets: list[Asset] = []
+        for page in sqs.get_paginator("list_queues").paginate():
+            for queue_url in page.get("QueueUrls", []):
+                attributes = sqs.get_queue_attributes(
+                    QueueUrl=queue_url,
+                    AttributeNames=[
+                        "QueueArn",
+                        "KmsMasterKeyId",
+                        "SqsManagedSseEnabled",
+                    ],
+                ).get("Attributes", {})
+                encrypted = bool(attributes.get("KmsMasterKeyId")) or (
+                    attributes.get("SqsManagedSseEnabled", "").lower() == "true"
+                )
+                arn = attributes.get("QueueArn", queue_url)
+                assets.append(
+                    Asset(
+                        resource_id=arn,
+                        resource_type="sqs_queue",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=queue_url.rsplit("/", 1)[-1],
+                        attributes={
+                            "encrypted_at_rest": encrypted,
+                            "customer_kms_key": bool(attributes.get("KmsMasterKeyId")),
+                        },
+                        context={"sensitive_data": True},
+                    )
+                )
+        return assets
+
+    def _collect_sns(self) -> list[Asset]:
+        sns = self.client("sns")
+        assets: list[Asset] = []
+        for page in sns.get_paginator("list_topics").paginate():
+            for topic in page.get("Topics", []):
+                arn = topic["TopicArn"]
+                attributes = sns.get_topic_attributes(TopicArn=arn).get("Attributes", {})
+                assets.append(
+                    Asset(
+                        resource_id=arn,
+                        resource_type="sns_topic",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=arn.rsplit(":", 1)[-1],
+                        attributes={
+                            "encrypted_at_rest": bool(attributes.get("KmsMasterKeyId")),
+                            "customer_kms_key": bool(attributes.get("KmsMasterKeyId")),
+                        },
+                        context={"sensitive_data": True},
+                    )
+                )
+        return assets
