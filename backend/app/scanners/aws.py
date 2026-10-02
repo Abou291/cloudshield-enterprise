@@ -81,6 +81,13 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("secrets-manager", self._collect_secrets_manager),
             ("eks", self._collect_eks),
             ("load-balancers", self._collect_load_balancers),
+            ("dynamodb", self._collect_dynamodb),
+            ("cloudwatch-logs", self._collect_cloudwatch_logs),
+            ("sqs", self._collect_sqs),
+            ("sns", self._collect_sns),
+            ("inspector2", self._collect_inspector2),
+            ("macie", self._collect_macie),
+            ("aws-backup", self._collect_backup),
         ]
         assets: list[Asset] = []
         for service, collector in global_collectors:

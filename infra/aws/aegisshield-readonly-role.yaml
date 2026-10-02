@@ -99,6 +99,17 @@ Resources:
                   - kms:GetKeyRotationStatus
                   - lambda:ListFunctions
                   - lambda:ListFunctionUrlConfigs
+                  - dynamodb:ListTables
+                  - dynamodb:DescribeTable
+                  - dynamodb:DescribeContinuousBackups
+                  - logs:DescribeLogGroups
+                  - sqs:ListQueues
+                  - sqs:GetQueueAttributes
+                  - sns:ListTopics
+                  - sns:GetTopicAttributes
+                  - inspector2:BatchGetAccountStatus
+                  - macie2:GetMacieSession
+                  - backup:ListBackupPlans
                 Resource: "*"
 
 Outputs:

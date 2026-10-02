@@ -516,6 +516,13 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
         "_collect_secrets_manager",
         "_collect_eks",
         "_collect_load_balancers",
+        "_collect_dynamodb",
+        "_collect_cloudwatch_logs",
+        "_collect_sqs",
+        "_collect_sns",
+        "_collect_inspector2",
+        "_collect_macie",
+        "_collect_backup",
     ]
     for name in regional_names:
         setattr(provider, name, Mock(return_value=[]))

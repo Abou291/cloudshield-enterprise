@@ -84,3 +84,82 @@ rules:
       - path: tls_listener
         operator: is_false
     remediation: Terminate TLS at the load balancer or document the upstream TLS termination point and enforce encrypted transport end to end.
+
+
+  - id: DDB-001
+    name: DynamoDB point-in-time recovery disabled
+    description: A DynamoDB table does not have point-in-time recovery enabled.
+    resource_type: dynamodb_table
+    severity: medium
+    confidence: 0.98
+    conditions:
+      - path: point_in_time_recovery
+        operator: is_false
+    remediation: Enable point-in-time recovery for tables whose recovery requirements justify continuous backups.
+
+  - id: LOG-001
+    name: CloudWatch log group has unlimited retention
+    description: A CloudWatch Logs group has no explicit retention period and can grow indefinitely.
+    resource_type: cloudwatch_log_group
+    severity: low
+    confidence: 0.99
+    conditions:
+      - path: retention_configured
+        operator: is_false
+    remediation: Configure a retention period aligned with incident-response, audit and regulatory requirements.
+
+  - id: SQS-001
+    name: SQS queue encryption at rest not detected
+    description: A queue does not report either SQS-managed server-side encryption or a KMS key.
+    resource_type: sqs_queue
+    severity: medium
+    confidence: 0.96
+    conditions:
+      - path: encrypted_at_rest
+        operator: is_false
+    remediation: Enable SQS-managed server-side encryption or use an appropriate KMS key after validating application permissions.
+
+  - id: SNS-001
+    name: SNS topic KMS encryption not configured
+    description: An SNS topic does not report a KMS key for server-side encryption.
+    resource_type: sns_topic
+    severity: medium
+    confidence: 0.96
+    conditions:
+      - path: encrypted_at_rest
+        operator: is_false
+    remediation: Configure SNS server-side encryption with an appropriate KMS key and validate publisher/subscriber permissions.
+
+
+  - id: DET-001
+    name: Amazon Inspector is not enabled
+    description: Amazon Inspector does not report an enabled account state in this Region.
+    resource_type: inspector_account
+    severity: medium
+    confidence: 0.96
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: Enable Amazon Inspector for the workload types in scope and route actionable findings into the incident workflow.
+
+  - id: DET-002
+    name: Amazon Macie is not enabled
+    description: Amazon Macie does not report an enabled session in this Region.
+    resource_type: macie_account
+    severity: low
+    confidence: 0.94
+    conditions:
+      - path: enabled
+        operator: is_false
+    remediation: If sensitive data discovery is required for this environment, enable Macie and define a reviewed findings workflow.
+
+  - id: BAK-001
+    name: No active AWS Backup plan detected
+    description: AWS Backup reports no active backup plan in this Region.
+    resource_type: backup_account
+    severity: medium
+    confidence: 0.90
+    conditions:
+      - path: has_active_plan
+        operator: is_false
+    remediation: Define and test a backup policy appropriate to the recovery objectives for workloads that require centralized AWS Backup protection.
