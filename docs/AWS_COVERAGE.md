@@ -1,6 +1,6 @@
 # AWS coverage matrix
 
-AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what the scanner actually observes; it is not a claim of complete AWS, CIS, ISO 27001, PCI DSS or regulatory coverage.
+AegisShield 0.7.0 is a read-only AWS CSPM pilot. This document describes what the scanner actually observes; it is not a claim of complete AWS, CIS, ISO 27001, PCI DSS or regulatory coverage.
 
 ## Identity
 
@@ -18,7 +18,7 @@ AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what th
 
 | Control | Evidence source | Finding |
 | --- | --- | --- |
-| S3 public policy state | S3 policy status | Public bucket |
+| S3 public policy/ACL state | S3 policy status + bucket ACL | Public bucket |
 | S3 Block Public Access | S3 public access block | Protection not fully enabled |
 | S3 default encryption | S3 encryption configuration | Explicit default encryption absent |
 | S3 versioning | S3 versioning configuration | Versioning disabled |
@@ -32,6 +32,9 @@ AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what th
 | RDS storage encryption | RDS DescribeDBInstances | Encryption disabled |
 | RDS deletion protection | RDS DescribeDBInstances | Deletion protection disabled |
 | RDS automated backup retention | RDS DescribeDBInstances | Backup retention is zero |
+| DynamoDB recovery | DynamoDB DescribeContinuousBackups | Point-in-time recovery disabled |
+| SQS encryption | SQS queue attributes | Server-side encryption not detected |
+| SNS encryption | SNS topic attributes | KMS encryption not configured |
 
 ## Network, logging and detection
 
@@ -48,6 +51,13 @@ AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what th
 | EKS API endpoint | EKS cluster VPC config | Public control-plane endpoint open to world CIDR |
 | EKS audit logging | EKS control-plane logging config | Audit log type disabled |
 | ALB/NLB transport | ELBv2 load balancers and listeners | Internet-facing load balancer without HTTPS/TLS listener |
+| CloudWatch Logs retention | CloudWatch DescribeLogGroups | No explicit retention period |
+| Amazon Inspector | Inspector2 BatchGetAccountStatus | Inspector not enabled |
+| Amazon Macie | Macie GetMacieSession | Macie not enabled |
+| AWS Backup | Backup ListBackupPlans | No active backup plan detected |
+| IAM Access Analyzer | Access Analyzer ListAnalyzers | No active analyzer in Region |
+| EBS snapshot sharing | EC2 snapshot attributes | Public create-volume permission |
+| RDS snapshot sharing | RDS snapshot attributes | Public restore permission |
 
 ## Cryptography and serverless
 

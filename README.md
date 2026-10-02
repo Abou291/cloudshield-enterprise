@@ -65,6 +65,17 @@ The scanner currently checks:
 - Secrets Manager: long-lived secrets without automatic rotation.
 - EKS: world-open public API endpoints and control-plane audit logging.
 - ALB/NLB: internet-facing load balancers without HTTPS/TLS listeners.
+- DynamoDB: point-in-time recovery posture.
+- CloudWatch Logs: explicit retention configuration.
+- SQS: server-side encryption posture.
+- SNS: KMS server-side encryption posture.
+- Amazon Inspector: regional account enablement state.
+- Amazon Macie: regional service enablement state.
+- AWS Backup: presence of active backup plans.
+- IAM Access Analyzer: active analyzer presence per Region.
+- EBS snapshots: public create-volume exposure.
+- RDS manual snapshots: public restore exposure.
+- S3: bucket policy plus ACL public-access evidence.
 - Optional multi-Region scanning: discovers enabled AWS regions and runs regional collectors in each one; mono-Region remains the default.
 - Coverage gaps: missing read-only permissions or unavailable optional service APIs are reported without aborting the whole scan.
 

@@ -57,6 +57,7 @@ Resources:
                   - s3:GetBucketLocation
                   - s3:GetBucketPublicAccessBlock
                   - s3:GetBucketVersioning
+                  - s3:GetBucketAcl
                 Resource: "*"
               - Sid: NetworkInventory
                 Effect: Allow
@@ -68,11 +69,15 @@ Resources:
                   - ec2:DescribeFlowLogs
                   - ec2:DescribeRegions
                   - ec2:DescribeInstances
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeSnapshotAttribute
                 Resource: "*"
               - Sid: DatabaseInventory
                 Effect: Allow
                 Action:
                   - rds:DescribeDBInstances
+                  - rds:DescribeDBSnapshots
+                  - rds:DescribeDBSnapshotAttributes
                 Resource: "*"
               - Sid: ContainerAndSecretsInventory
                 Effect: Allow
@@ -99,6 +104,18 @@ Resources:
                   - kms:GetKeyRotationStatus
                   - lambda:ListFunctions
                   - lambda:ListFunctionUrlConfigs
+                  - dynamodb:ListTables
+                  - dynamodb:DescribeTable
+                  - dynamodb:DescribeContinuousBackups
+                  - logs:DescribeLogGroups
+                  - sqs:ListQueues
+                  - sqs:GetQueueAttributes
+                  - sns:ListTopics
+                  - sns:GetTopicAttributes
+                  - inspector2:BatchGetAccountStatus
+                  - macie2:GetMacieSession
+                  - backup:ListBackupPlans
+                  - access-analyzer:ListAnalyzers
                 Resource: "*"
 
 Outputs:

@@ -81,6 +81,16 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("secrets-manager", self._collect_secrets_manager),
             ("eks", self._collect_eks),
             ("load-balancers", self._collect_load_balancers),
+            ("dynamodb", self._collect_dynamodb),
+            ("cloudwatch-logs", self._collect_cloudwatch_logs),
+            ("sqs", self._collect_sqs),
+            ("sns", self._collect_sns),
+            ("inspector2", self._collect_inspector2),
+            ("macie", self._collect_macie),
+            ("aws-backup", self._collect_backup),
+            ("access-analyzer", self._collect_access_analyzer),
+            ("ebs-snapshots", self._collect_ebs_snapshots),
+            ("rds-snapshots", self._collect_rds_snapshots),
         ]
         assets: list[Asset] = []
         for service, collector in global_collectors:
@@ -252,7 +262,9 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
         )
         for bucket in buckets:
             name = bucket["Name"]
-            public = self._bucket_public(s3, name)
+            policy_public = self._bucket_public(s3, name)
+            public_acl = self._bucket_public_acl(s3, name)
+            public = policy_public or public_acl
             encrypted = self._bucket_encrypted(s3, name)
             logging = bool(s3.get_bucket_logging(Bucket=name).get("LoggingEnabled"))
             assets.append(
@@ -264,6 +276,8 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                     name=name,
                     attributes={
                         "public": public,
+                        "public_policy": policy_public,
+                        "public_acl": public_acl,
                         "encrypted": encrypted,
                         "logging_enabled": logging,
                         "versioning_enabled": self._bucket_versioning_enabled(s3, name),
@@ -646,6 +660,18 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             if exc.response.get("Error", {}).get("Code") == "NoSuchBucketPolicy":
                 return False
             raise
+
+    @staticmethod
+    def _bucket_public_acl(s3: BaseClient, name: str) -> bool:
+        response = s3.get_bucket_acl(Bucket=name)
+        public_uris = {
+            "http://acs.amazonaws.com/groups/global/AllUsers",
+            "http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
+        }
+        return any(
+            grant.get("Grantee", {}).get("URI") in public_uris
+            for grant in response.get("Grants", [])
+        )
 
     @staticmethod
     def _bucket_encrypted(s3: BaseClient, name: str) -> bool:
