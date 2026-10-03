@@ -31,6 +31,7 @@ from app.services.diagnostics import (
     classify_aws_error,
 )
 from app.services.findings import FindingRepository
+from app.services.remediation import RemediationPlan, build_remediation_plan
 from app.services.reporting import (
     build_attack_paths,
     build_executive_summary,
@@ -309,6 +310,20 @@ def update_finding_status(
     )
     db.commit()
     return finding
+
+
+@router.get("/findings/{fingerprint}/remediation", response_model=RemediationPlan)
+def finding_remediation(
+    fingerprint: str,
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> RemediationPlan:
+    """Build a deterministic remediation plan; this endpoint never executes AWS changes."""
+    finding = FindingRepository(db, principal.tenant_id, source).get(fingerprint)
+    if finding is None:
+        raise HTTPException(404, "Finding not found")
+    return build_remediation_plan(finding)
 
 
 @router.get("/scans", response_model=list[ScanHistory])
