@@ -92,6 +92,13 @@ class FindingRepository:
                 record.status = FindingStatus.RESOLVED.value
         self.db.flush()
 
+    def get(self, fingerprint: str) -> Finding | None:
+        record = self.db.get(
+            FindingRecord,
+            (self.tenant_id, self.source, fingerprint),
+        )
+        return to_domain(record) if record is not None else None
+
     def set_status(self, fingerprint: str, status: FindingStatus) -> Finding | None:
         record = self.db.get(
             FindingRecord,
