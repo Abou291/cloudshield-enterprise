@@ -81,7 +81,7 @@ jobs:
           python -m pip install --disable-pip-version-check "semgrep==1.178.0"
           semgrep scan --error --config p/python --config p/typescript --config p/owasp-top-ten backend frontend/src
       - name: Terraform scan
-        uses: bridgecrewio/checkov-action@5798bad4f6dd9c1fb67ae3ec10d42d8fb67037c4 # v12 pinned 2026-09-28
+        uses: bridgecrewio/checkov-action@cc0e17d456ef1713bbfd963ebac19dc776775cb2 # v12 pinned 2026-09-28
         with:
           directory: infra/terraform
           framework: terraform
