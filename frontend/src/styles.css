@@ -508,6 +508,7 @@ main {
   color: var(--muted);
 }
 .table-wrap {
+  position: relative;
   overflow-x: auto;
 }
 table {
