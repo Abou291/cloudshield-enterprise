@@ -344,6 +344,7 @@ function FindingDialog({
   onClose,
   onStatus,
   onVerify,
+  feedback,
 }: {
   finding: Finding;
   operator: boolean;
@@ -351,6 +352,7 @@ function FindingDialog({
   onClose: () => void;
   onStatus: (status: Finding["status"]) => void;
   onVerify: () => void;
+  feedback: { error: string; notice: string };
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -379,6 +381,8 @@ function FindingDialog({
             <X size={20} />
           </button>
         </div>
+        {feedback.error && <p className="error" role="alert">{feedback.error}</p>}
+        {feedback.notice && <p className="notice" role="status">{feedback.notice}</p>}
         <p className="eyebrow">
           {finding.rule_id} · {statusNames[finding.status]}
         </p>
@@ -499,7 +503,10 @@ function Dashboard({
   const titleRef = useRef<HTMLHeadingElement>(null);
   const navigated = useRef(false);
   useEffect(() => {
-    const onHash = () => setPage(pageFromHash());
+    const onHash = () => {
+      const next = window.location.hash.slice(1);
+      if (next in pages) setPage(next as Page);
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -862,7 +869,7 @@ function Dashboard({
               </span>
             </div>
           )}
-          {error && (
+          {error && !selected && (
             <div role="alert" className="error">
               {error}
               <button
@@ -876,7 +883,7 @@ function Dashboard({
               </button>
             </div>
           )}
-          {notice && (
+          {notice && !selected && (
             <div role="status" className="notice">
               <Check size={17} />
               {notice}
@@ -1228,6 +1235,7 @@ function Dashboard({
           busy={busy || fetching || !canScan}
           onClose={() => setSelected(null)}
           onStatus={(status) => void changeStatus(status)}
+          feedback={{ error, notice }}
           onVerify={() => void scan()}
         />
       )}
