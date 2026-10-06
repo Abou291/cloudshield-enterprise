@@ -117,6 +117,9 @@ jobs:
             Get-Process "aegisshield-api" -ErrorAction SilentlyContinue | Stop-Process -Force
           }
 
+      - name: Test actual packaged renderer
+        run: node scripts/smoke-desktop.cjs
+
       - name: Verify desktop renderer and installer output
         shell: pwsh
         run: |
@@ -143,5 +146,6 @@ jobs:
             desktop/dist/AegisShield-Setup-*.exe
             desktop/dist/*.blockmap
             desktop/dist/SHA256SUMS.txt
+            desktop/dist/screenshots/*.png
           if-no-files-found: error
           retention-days: 14

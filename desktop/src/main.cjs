@@ -7,6 +7,8 @@ const path = require("node:path");
 let backend;
 let apiToken;
 let instanceNonce;
+let mainWindow;
+let quitting = false;
 const PORT = 8765;
 const API_PATTERN = `http://127.0.0.1:${PORT}/api/v1/*`;
 
@@ -58,6 +60,12 @@ function startBackend() {
     windowsHide: true,
     stdio: "ignore",
   });
+  backend.on("exit", () => {
+    if (!quitting && mainWindow) {
+      dialog.showErrorBox("AegisShield", "Le service local s’est arrêté. Fermez puis relancez l’application.");
+      app.quit();
+    }
+  });
   backend.on("error", (error) => {
     dialog.showErrorBox(
       "AegisShield",
@@ -79,7 +87,7 @@ function configureSession() {
   );
 }
 
-async function waitForBackend(remaining = 30) {
+async function waitForBackend(remaining = 90) {
   try {
     const response = await fetch(`http://127.0.0.1:${PORT}/api/v1/health`);
     if (response.ok) {
@@ -100,10 +108,11 @@ function createWindow() {
   const window = new BrowserWindow({
     width: 1440,
     height: 940,
-    minWidth: 1080,
+    minWidth: 960,
     minHeight: 720,
     title: "AegisShield",
     show: false,
+    backgroundColor: "#f6f8fb",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -112,6 +121,8 @@ function createWindow() {
     },
   });
 
+  mainWindow = window;
+  window.on("closed", () => { mainWindow = undefined; });
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
@@ -129,6 +140,13 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
   app.whenReady().then(async () => {
     startBackend();
     configureSession();
@@ -146,7 +164,12 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 app.on("before-quit", () => {
+  quitting = true;
   apiToken = undefined;
   instanceNonce = undefined;
-  if (backend && !backend.killed) backend.kill();
+  if (backend && !backend.killed) {
+    if (process.platform === "win32" && backend.pid) {
+      spawn("taskkill", ["/PID", String(backend.pid), "/T", "/F"], { windowsHide: true });
+    } else backend.kill();
+  }
 });

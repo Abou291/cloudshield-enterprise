@@ -1,8 +1,8 @@
 {
   "name": "aegisshield-desktop",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
-  "description": "AegisShield desktop cloud security console",
+  "description": "AegisShield — audit AWS et corrections guidées",
   "main": "src/main.cjs",
   "scripts": {
     "dev": "electron .",
@@ -11,7 +11,8 @@
   },
   "devDependencies": {
     "electron": "^37.4.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "playwright": "1.61.1"
   },
   "build": {
     "appId": "com.abou291.aegisshield",
@@ -37,7 +38,12 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AegisShield",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "asar": true,
     "artifactName": "AegisShield-Setup-${version}.${ext}",

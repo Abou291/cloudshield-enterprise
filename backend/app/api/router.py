@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.auth import Identity, Operator
@@ -18,7 +18,7 @@ from app.core.domain import (
     ScanResult,
     Severity,
 )
-from app.db.models import AuditRecord, ScanRecord
+from app.db.models import AuditRecord, FindingRecord, ScanRecord
 from app.db.session import engine, get_db
 from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
@@ -230,11 +230,11 @@ def security_report(
     principal: Identity,
     source: Literal["demo-fixture", "aws"] = "aws",
 ) -> dict:
-    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, None, 0)
     scans = list(
         db.scalars(
             select(ScanRecord)
-            .where(ScanRecord.tenant_id == principal.tenant_id)
+            .where(ScanRecord.tenant_id == principal.tenant_id, ScanRecord.source == source)
             .order_by(ScanRecord.started_at.desc(), ScanRecord.scan_id)
             .limit(100)
         )
@@ -248,7 +248,7 @@ def executive_summary(
     principal: Identity,
     source: Literal["demo-fixture", "aws"] = "aws",
 ) -> dict:
-    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, None, 0)
     return build_executive_summary(findings)
 
 
@@ -258,8 +258,53 @@ def attack_paths(
     principal: Identity,
     source: Literal["demo-fixture", "aws"] = "aws",
 ) -> list[dict]:
-    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, None, 0)
     return build_attack_paths(findings)
+
+
+@router.get("/posture-summary")
+def posture_summary(
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> dict:
+    scope = (FindingRecord.tenant_id == principal.tenant_id, FindingRecord.source == source)
+    rows = db.execute(
+        select(FindingRecord.status, FindingRecord.severity, func.count())
+        .where(*scope).group_by(FindingRecord.status, FindingRecord.severity)
+    ).all()
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    states = {"open": 0, "acknowledged": 0, "resolved": 0}
+    for state, severity, count in rows:
+        states[state] += count
+        if state != "resolved":
+            counts[severity] += count
+    active = (*scope, FindingRecord.status != "resolved")
+    highest = db.scalar(select(func.max(FindingRecord.risk_score)).where(*active))
+    gaps = db.scalar(select(func.count()).select_from(FindingRecord).where(
+        *active, FindingRecord.rule_id == "COV-001"
+    ))
+    latest = db.scalar(select(ScanRecord).where(
+        ScanRecord.tenant_id == principal.tenant_id, ScanRecord.source == source
+    ).order_by(ScanRecord.started_at.desc(), ScanRecord.scan_id).limit(1))
+    return {
+        "active": sum(counts.values()), "severities": counts, "states": states,
+        "highest_risk": highest, "coverage_gaps": gaps,
+        "latest_scan": ScanHistory.model_validate(latest) if latest else None,
+    }
+
+
+@router.get("/findings/{fingerprint}", response_model=Finding)
+def finding_detail(
+    fingerprint: str, db: DatabaseSession, principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> Finding:
+    from app.services.findings import to_domain
+
+    record = db.get(FindingRecord, (principal.tenant_id, source, fingerprint))
+    if record is None:
+        raise HTTPException(404, "Finding not found")
+    return to_domain(record)
 
 
 @router.get("/health")
