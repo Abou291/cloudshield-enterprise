@@ -104,8 +104,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --disable-pip-version-check "pip-audit==2.10.1"
-      - run: pip-audit -r <(python -m pip install --dry-run --report - ./backend 2>/dev/null | python -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(x["metadata"]["name"]+"=="+x["metadata"]["version"] for x in d.get("install",[])))')
+      - name: Audit resolved Python runtime dependencies
         shell: bash
+        run: |
+          python -m pip install --dry-run --ignore-installed --report /tmp/backend-audit.json ./backend
+          python scripts/export-audit-requirements.py /tmp/backend-audit.json /tmp/backend-audit.txt
+          pip-audit --disable-pip --no-deps -r /tmp/backend-audit.txt
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "22"
