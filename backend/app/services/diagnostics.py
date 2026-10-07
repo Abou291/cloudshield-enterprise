@@ -3,6 +3,9 @@ from importlib.metadata import PackageNotFoundError, version
 from botocore.exceptions import (
     BotoCoreError,
     ClientError,
+    LoginRefreshRequired,
+    LoginTokenLoadError,
+    MissingDependencyException,
     NoCredentialsError,
     ProfileNotFound,
 )
@@ -21,6 +24,18 @@ def product_version() -> str:
 
 
 def classify_aws_error(exc: Exception) -> tuple[str, str]:
+    if isinstance(exc, MissingDependencyException):
+        return (
+            "AWS_LOGIN_COMPONENT_MISSING",
+            "Un composant AWS manque dans cette installation. Installez la dernière "
+            "version d’AegisShield ; vos paramètres AWS ne sont pas en cause.",
+        )
+    if isinstance(exc, (LoginTokenLoadError, LoginRefreshRequired)):
+        return (
+            "AWS_LOGIN_REQUIRED",
+            "La session AWS locale est absente ou expirée. Relancez aws login "
+            "avec le profil configuré dans AegisShield.",
+        )
     if isinstance(exc, ProfileNotFound):
         return (
             "AWS_PROFILE_NOT_FOUND",

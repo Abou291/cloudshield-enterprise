@@ -1,8 +1,8 @@
 {
   "name": "aegisshield-desktop",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
-  "description": "AegisShield — audit AWS et corrections guidées",
+  "description": "AegisShield \u2014 audit AWS et corrections guid\u00e9es",
   "main": "src/main.cjs",
   "scripts": {
     "dev": "electron .",
