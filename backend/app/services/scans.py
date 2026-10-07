@@ -80,7 +80,13 @@ class ScanService:
             if coverage_incomplete:
                 repository.upsert_many(findings)
             else:
-                repository.reconcile(findings)
+                repository.reconcile(
+                    findings,
+                    inspected_resources={
+                        (asset.account_id, asset.region, asset.resource_type, asset.resource_id)
+                        for asset in assets
+                    },
+                )
             record.status = "succeeded"
             record.assets_scanned = len(assets)
             record.findings_count = len(findings)

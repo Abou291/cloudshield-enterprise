@@ -1,12 +1,35 @@
-import type { AssistantResponse, AttackPath, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, ExecutiveSummary, Finding, FindingStatus, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
+import type {
+  AssistantResponse,
+  AttackPath,
+  AuditEvent,
+  AwsConnectionInput,
+  AwsConnectionView,
+  AwsDiagnostics,
+  BackupInfo,
+  Diagnostics,
+  ExecutiveSummary,
+  Finding,
+  FindingStatus,
+  ScanHistory,
+  ScanResult,
+  SecurityReport,
+  Session,
+} from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 // Intentionally memory-only: reload/logout forgets the token.
 let apiToken = "";
-export function setApiToken(token: string) { apiToken = token; }
+export function setApiToken(token: string) {
+  apiToken = token;
+}
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -15,13 +38,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new ApiError(response.status, typeof payload.detail === "string"
-      ? payload.detail : `Request failed with status ${response.status}`);
+    throw new ApiError(
+      response.status,
+      typeof payload.detail === "string"
+        ? payload.detail
+        : `Request failed with status ${response.status}`,
+    );
   }
   return response.json() as Promise<T>;
 }
 
-export const listFindings = (source: string, offset = 0, includeResolved = false) =>
+export const listFindings = (
+  source: string,
+  offset = 0,
+  includeResolved = false,
+) =>
   request<Finding[]>(
     `/findings?source=${encodeURIComponent(source)}&limit=100&offset=${offset}&include_resolved=${includeResolved}`,
   );
@@ -30,45 +61,75 @@ export const updateFindingStatus = (
   fingerprint: string,
   source: string,
   status: FindingStatus,
-) => request<Finding>(
-  `/findings/${encodeURIComponent(fingerprint)}/status?source=${encodeURIComponent(source)}`,
-  {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  },
-);
+) =>
+  request<Finding>(
+    `/findings/${encodeURIComponent(fingerprint)}/status?source=${encodeURIComponent(source)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+  );
 export const getSession = () => request<Session>("/session");
 export const listScans = () => request<ScanHistory[]>("/scans");
 export const listAudit = () => request<AuditEvent[]>("/audit");
-export const runAwsScan = () => request<ScanResult>("/scans/aws", { method: "POST" });
+export const runAwsScan = () =>
+  request<ScanResult>("/scans/aws", { method: "POST" });
 
 export const runDemoScan = () =>
   request<ScanResult>("/scans/demo", { method: "POST" });
 
-export const testAwsConnection = (connection: AwsConnectionInput) => request<AwsConnectionView>(
-  "/connections/aws/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(connection) },
-);
-export const saveAwsConnection = (connection: AwsConnectionInput) => request<AwsConnectionView>(
-  "/connections/aws", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(connection) },
-);
+export const testAwsConnection = (connection: AwsConnectionInput) =>
+  request<AwsConnectionView>("/connections/aws/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(connection),
+  });
+export const saveAwsConnection = (connection: AwsConnectionInput) =>
+  request<AwsConnectionView>("/connections/aws", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(connection),
+  });
 
-export const askAssistant = (question: string, source: string) => request<AssistantResponse>("/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, source }) });
+export const askAssistant = (question: string, source: string) =>
+  request<AssistantResponse>("/assistant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, source }),
+  });
 
 export const getDiagnostics = () => request<Diagnostics>("/diagnostics");
-export const runAwsDiagnostics = () => request<AwsDiagnostics>("/diagnostics/aws", { method: "POST" });
-export const createBackup = () => request<BackupInfo>("/backups", { method: "POST" });
-export const restoreLatestBackup = () => request<BackupInfo>("/backups/restore-latest", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ confirmation: "RESTORE" }),
-});
+export const runAwsDiagnostics = () =>
+  request<AwsDiagnostics>("/diagnostics/aws", { method: "POST" });
+export const createBackup = () =>
+  request<BackupInfo>("/backups", { method: "POST" });
+export const restoreLatestBackup = () =>
+  request<BackupInfo>("/backups/restore-latest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmation: "RESTORE" }),
+  });
 export const getSecurityReport = (source: string) =>
-  request<SecurityReport>(`/reports/security?source=${encodeURIComponent(source)}`);
-
+  request<SecurityReport>(
+    `/reports/security?source=${encodeURIComponent(source)}`,
+  );
 
 export const getExecutiveSummary = (source: string) =>
-  request<ExecutiveSummary>(`/executive-summary?source=${encodeURIComponent(source)}`);
+  request<ExecutiveSummary>(
+    `/executive-summary?source=${encodeURIComponent(source)}`,
+  );
 
 export const getAttackPaths = (source: string) =>
   request<AttackPath[]>(`/attack-paths?source=${encodeURIComponent(source)}`);
+
+export const getPostureSummary = (source: string) =>
+  request<import("./types").PostureSummary>(
+    `/posture-summary?source=${encodeURIComponent(source)}`,
+  );
+export const getFinding = (source: string, fingerprint: string) =>
+  request<Finding>(
+    `/findings/${encodeURIComponent(fingerprint)}?source=${encodeURIComponent(source)}`,
+  );
+export const getAwsConnection = () =>
+  request<AwsConnectionView>("/connections/aws");

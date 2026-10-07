@@ -39,6 +39,12 @@ jobs:
         shell: pwsh
         run: ./scripts/build-desktop-backend.ps1
 
+      - name: Verify packaged AWS login support offline
+        shell: pwsh
+        run: |
+          & ./backend/dist/aegisshield-api.exe --check-aws-login
+          if ($LASTEXITCODE -ne 0) { throw "Packaged AWS login runtime is incomplete" }
+
       - name: Smoke-test packaged backend
         shell: pwsh
         run: |
@@ -117,6 +123,9 @@ jobs:
             Get-Process "aegisshield-api" -ErrorAction SilentlyContinue | Stop-Process -Force
           }
 
+      - name: Test actual packaged renderer
+        run: node scripts/smoke-desktop.cjs
+
       - name: Verify desktop renderer and installer output
         shell: pwsh
         run: |
@@ -143,5 +152,6 @@ jobs:
             desktop/dist/AegisShield-Setup-*.exe
             desktop/dist/*.blockmap
             desktop/dist/SHA256SUMS.txt
+            desktop/dist/screenshots/*.png
           if-no-files-found: error
           retention-days: 14

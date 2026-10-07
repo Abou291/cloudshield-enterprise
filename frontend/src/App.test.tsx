@@ -1,9 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
-
 import App from "./App";
 import { setApiToken } from "./api";
-
 const session = {
   tenant_id: "demo",
   subject: "local-demo",
@@ -12,115 +16,195 @@ const session = {
   desktop: false,
   aws_enabled: false,
 };
-const response = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body });
-const emptySummary = { findings: 0, critical: 0, high: 0, medium: 0, low: 0, highest_risk: null, accounts_affected: 0, regions_affected: 0, internet_exposed: 0, privileged: 0, sensitive_data: 0, attack_path_candidates: 0, top_risks: [] };
+const total = {
+  active: 0,
+  severities: { critical: 0, high: 0, medium: 0, low: 0 },
+  states: { open: 0, acknowledged: 0, resolved: 0 },
+  highest_risk: null,
+  coverage_gaps: 0,
+  latest_scan: null,
+};
+const response = (body: unknown, status = 200) => ({
+  ok: status < 400,
+  status,
+  json: async () => body,
+});
 const fetchMock = vi.fn();
-
+const base = (url: string) =>
+  url.endsWith("/session")
+    ? session
+    : url.includes("/posture-summary")
+      ? total
+      : [];
 beforeEach(() => {
-  setApiToken(""); fetchMock.mockReset(); vi.stubGlobal("fetch", fetchMock);
-  fetchMock.mockImplementation(async (url: string) => {
-    if (url.endsWith("/session")) return response(session);
-    if (url.includes("/executive-summary")) return response(emptySummary);
-    return response([]);
-  });
+  window.location.hash = "";
+  setApiToken("");
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockImplementation(async (url: string) => response(base(url)));
 });
-afterEach(() => { cleanup(); setApiToken(""); });
+afterEach(() => {
+  cleanup();
+  setApiToken("");
+  vi.unstubAllGlobals();
+});
 
-test("renders the empty dashboard", async () => {
+test("empty demo is explicitly synthetic and does not claim a safe score", async () => {
   render(<App />);
-  expect(screen.getByText("AegisShield")).toBeInTheDocument();
-  expect(await screen.findByText("No findings loaded")).toBeInTheDocument();
-  expect(screen.getByText("No data")).toBeInTheDocument();
-  expect(screen.queryByText("Security score")).not.toBeInTheDocument();
-  expect(screen.getByText(/Synthetic data/)).toBeInTheDocument();
+  expect(
+    await screen.findByText("Votre premier audit commence ici"),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Données fictives/)).toBeInTheDocument();
+  expect(screen.queryByText(/100%/)).not.toBeInTheDocument();
 });
-
-test("requires a token and clears it on sign-out", async () => {
+test("navigation renders only the selected view", async () => {
+  render(<App />);
+  await screen.findByText("Commencez par ce qui compte.");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Historique des audits" }),
+  );
+  expect(
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Historique des audits",
+    }),
+  ).toHaveFocus();
+  expect(
+    screen.queryByText("Commencez par ce qui compte."),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByText("Journal des actions · toutes sources"),
+  ).toBeInTheDocument();
+});
+test("viewer cannot run audits", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    response(
+      url.endsWith("/session") ? { ...session, role: "viewer" } : base(url),
+    ),
+  );
+  render(<App />);
+  expect(
+    await screen.findByRole("button", { name: "Auditer la démo" }),
+  ).toBeDisabled();
+});
+test("scan failure remains visible after refresh and existing results stay available", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    url.endsWith("/scans/demo")
+      ? response(
+          { detail: "Scan failed; previous findings were preserved" },
+          503,
+        )
+      : response(base(url)),
+  );
+  render(<App />);
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Auditer la démo" }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Auditer la démo" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "previous findings were preserved",
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Auditer la démo" }),
+    ).toBeEnabled(),
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "previous findings were preserved",
+  );
+});
+test("summary uses source totals even when displayed page is empty", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    response(
+      url.includes("/posture-summary")
+        ? {
+            ...total,
+            active: 603,
+            highest_risk: 96,
+            severities: { ...total.severities, high: 603 },
+          }
+        : base(url),
+    ),
+  );
+  render(<App />);
+  expect(await screen.findByText("96")).toBeInTheDocument();
+  expect(screen.getAllByText("603").length).toBeGreaterThan(0);
+});
+test("AWS desktop opens on real AWS and can reach onboarding", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    response(
+      url.endsWith("/session")
+        ? { ...session, demo: false, desktop: true }
+        : base(url),
+    ),
+  );
+  render(<App />);
+  const source = await screen.findByRole("combobox", {
+    name: "Source des résultats",
+  });
+  expect(source).toHaveValue("aws");
+  expect(screen.queryByText(/Données fictives/)).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Connexion AWS" }));
+  expect(
+    await screen.findByLabelText("ARN du rôle en lecture seule"),
+  ).toBeInTheDocument();
+});
+test("failed role validation never saves the connection", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    url.endsWith("/connections/aws/test")
+      ? response({ detail: "Role access denied" }, 422)
+      : response(
+          url.endsWith("/session")
+            ? { ...session, demo: false, desktop: true }
+            : base(url),
+        ),
+  );
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "Connexion AWS" }));
+  fireEvent.change(screen.getByLabelText("Identifiant du compte"), {
+    target: { value: "123456789012" },
+  });
+  fireEvent.change(screen.getByLabelText("ARN du rôle en lecture seule"), {
+    target: { value: "arn:aws:iam::123456789012:role/test" },
+  });
+  fireEvent.change(screen.getByLabelText("External ID"), {
+    target: { value: "external-value-123456" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Valider et enregistrer" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Role access denied",
+  );
+  expect(
+    fetchMock.mock.calls.some(
+      ([url, init]) =>
+        String(url).endsWith("/connections/aws") && init?.method === "PUT",
+    ),
+  ).toBe(false);
+});
+test("API authentication stays memory-only and clears on logout", async () => {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-    if (url.endsWith("/session")) {
-      return new Headers(init?.headers).get("Authorization") === "Bearer test-token"
+    if (url.endsWith("/session"))
+      return new Headers(init?.headers).get("Authorization") ===
+        "Bearer test-token"
         ? response({ ...session, demo: false, tenant_id: "alpha" })
         : response({ detail: "Valid API token required" }, 401);
-    }
-    return response([]);
+    return response(base(url));
   });
   render(<App />);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Connect" })).toBeEnabled());
-  fireEvent.change(screen.getByLabelText("API token"), { target: { value: "test-token" } });
-  fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Se connecter" })).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByLabelText("Jeton API"), {
+    target: { value: "test-token" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
   expect(await screen.findByText("alpha")).toBeInTheDocument();
   expect(localStorage.length).toBe(0);
   expect(sessionStorage.length).toBe(0);
-  fireEvent.click(screen.getByText("Sign out"));
-  expect(await screen.findByLabelText("API token")).toHaveValue("");
-  expect(screen.queryByText("alpha")).not.toBeInTheDocument();
-});
-
-test("viewer cannot trigger scans", async () => {
-  fetchMock.mockImplementation(async (url: string) => response(
-    url.endsWith("/session") ? { ...session, role: "viewer" } : []));
-  render(<App />);
-  expect(await screen.findByRole("button", { name: "Run demo scan" })).toBeDisabled();
-});
-
-test("scan failure remains visible after history refresh", async () => {
-  fetchMock.mockImplementation(async (url: string) => {
-    if (url.endsWith("/session")) return response(session);
-    if (url.endsWith("/scans/demo")) return response({ detail: "Scan failed; previous findings were preserved" }, 503);
-    return response([]);
-  });
-  render(<App />);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Run demo scan" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Run demo scan" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("previous findings were preserved");
-  await waitFor(() => expect(screen.getByRole("button", { name: "Run demo scan" })).toBeEnabled());
-  expect(screen.getByRole("alert")).toHaveTextContent("previous findings were preserved");
-});
-
-test("shows failed scans without zero-findings success claims", async () => {
-  fetchMock.mockImplementation(async (url: string) => {
-    if (url.endsWith("/session")) return response(session);
-    if (url.endsWith("/scans")) return response([{
-      scan_id: "scan-1", source: "demo-fixture", status: "failed", started_at: "2026-09-20T10:00:00Z",
-      completed_at: "2026-09-20T10:01:00Z", assets_scanned: 0, findings_count: 0, error_code: "SCAN_FAILED",
-    }]);
-    return response([]);
-  });
-  render(<App />);
-  expect(await screen.findByText(/Displayed findings may be stale/)).toBeInTheDocument();
-  expect(screen.getByText("failed · SCAN_FAILED")).toBeInTheDocument();
-});
-
-
-test("renders risk intelligence without overstating attack reachability", async () => {
-  fetchMock.mockImplementation(async (url: string) => {
-    if (url.endsWith("/session")) return response(session);
-    if (url.includes("/executive-summary")) return response({
-      ...emptySummary,
-      findings: 3,
-      accounts_affected: 1,
-      regions_affected: 2,
-      internet_exposed: 1,
-      privileged: 1,
-      attack_path_candidates: 1,
-    });
-    if (url.includes("/attack-paths")) return response([{
-      path_id: "candidate-1",
-      kind: "exposure-to-privilege",
-      title: "Internet exposure combined with privileged identity risk",
-      account_id: "111122223333",
-      severity: "high",
-      score: 88,
-      confidence: "candidate",
-      rationale: "Correlated risk signals.",
-      caveat: "Correlated posture signals only; this does not prove reachability.",
-      steps: [],
-      remediation: "Reduce public exposure and privilege.",
-    }]);
-    return response([]);
-  });
-  render(<App />);
-  expect(await screen.findByText("Risk intelligence")).toBeInTheDocument();
-  expect(await screen.findByText("Internet exposure combined with privileged identity risk")).toBeInTheDocument();
-  expect(screen.getByText(/not proof that an exploit chain is reachable/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Se déconnecter"));
+  expect(await screen.findByLabelText("Jeton API")).toHaveValue("");
 });

@@ -115,3 +115,27 @@ def test_incomplete_coverage_does_not_auto_resolve_previous_findings() -> None:
         current = repository.list()
         assert any(item.fingerprint == finding.fingerprint for item in current)
         assert any(item.rule_id == "COV-001" for item in current)
+
+
+def test_reconcile_only_closes_resources_reinspected_in_the_same_scope() -> None:
+    with SessionLocal() as db:
+        repository = FindingRepository(db, "tenant-a", "aws")
+        current = sample_finding()
+        other_account = sample_finding("b" * 64).model_copy(
+            update={"account_id": "222222222222"}
+        )
+        other_region = sample_finding("c" * 64).model_copy(
+            update={"region": "us-east-1"}
+        )
+        deleted_resource = sample_finding("d" * 64).model_copy(
+            update={"resource_id": "not-observed"}
+        )
+        repository.reconcile([current, other_account, other_region, deleted_resource])
+        repository.reconcile([], inspected_resources={
+            (current.account_id, current.region, current.resource_type, current.resource_id)
+        })
+        remaining = {item.fingerprint for item in repository.list()}
+        assert current.fingerprint not in remaining
+        assert remaining == {item.fingerprint for item in [
+            other_account, other_region, deleted_resource
+        ]}

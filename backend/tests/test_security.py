@@ -249,4 +249,4 @@ def test_cors_preflight_allows_finding_patch(client):
 def test_openapi_reports_current_product_version(client):
     response = client.get("/openapi.json")
     assert response.status_code == 200
-    assert response.json()["info"]["version"] == "0.7.0"
+    assert response.json()["info"]["version"] == "0.8.1"

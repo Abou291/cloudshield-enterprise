@@ -1,10 +1,21 @@
 # AegisShield
 
-AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discovers a focused set of IAM, S3 and EC2 security-group configuration, evaluates declarative security rules, computes explainable contextual risk, persists findings locally and presents them in a React/Electron security console.
+AegisShield est une application Windows d’audit des configurations AWS pour les petites équipes : identifier les mauvaises configurations, comprendre les priorités, suivre la correction et relancer un audit. L’accès AWS reste en lecture seule.
 
-## Windows desktop pilot
+## Version 0.8 — audit AWS et interface Minimal SaaS
 
-The validated Windows pipeline builds an NSIS installer named `AegisShield-Setup-0.7.0.exe`. The packaged application has been exercised on a Windows GitHub runner: the PyInstaller backend starts successfully, a packaged demo scan completes, the Electron shell starts its secured loopback backend, renderer assets load with file-safe relative paths, and the installer is produced and uploaded as a workflow artifact.
+- Interface claire en français, bleu marine, navigation par vues et transitions discrètes (190 ms, désactivées si le système demande de réduire les animations).
+- Vue d’ensemble, plan de correction, historique, connexion AWS et paramètres.
+- Détail d’alerte en trois étapes : comprendre, corriger dans AWS, vérifier par un nouvel audit.
+- Totaux sur toutes les alertes de la source ; rapport JSON complet, sans limite arbitraire à 500 résultats.
+- Pas de fermeture automatique d’une alerte sur une ressource hors du périmètre effectivement réinspecté. Une ressource supprimée/non retrouvée reste à examiner ; un audit incomplet conserve les alertes précédentes.
+- Démonstration explicite et séparée des résultats AWS. Les fonctions expérimentales de corrélation et d’assistant restent dans l’API, hors du parcours principal.
+
+## Application Windows
+
+Le workflow Windows produit `AegisShield-Setup-0.8.0.exe` avec backend Python embarqué et interface Electron. Il prévoit des tests du backend empaqueté puis de la vraie interface (styles, audit démo, navigation, détail, suivi et historique). Voir le résultat du workflow pour le statut de validation de chaque build.
+
+L’installateur crée les raccourcis Bureau et menu Démarrer ; Node, Python et Docker ne sont pas requis pour utiliser le logiciel. AWS CLI reste nécessaire pour préparer le profil SSO utilisé par la connexion AWS. Les données locales sont conservées à la désinstallation et lors d’une mise à jour.
 
 The desktop backend binds to `127.0.0.1` only. Electron generates a fresh random bearer token and instance nonce at each launch; the token is injected into local API requests and is not persisted in the renderer. Production API docs are disabled in the packaged application.
 
@@ -18,10 +29,10 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - AWS STS AssumeRole with External ID, expected account binding and named AWS CLI/IAM Identity Center profile support.
 - Declarative rules for IAM, S3 and network exposure.
 - Explainable 0–100 contextual risk scoring.
-- Executive risk intelligence with conservative cross-finding attack-path candidates.
+- Experimental risk-correlation API retained outside the main audit interface.
 - SQLite desktop persistence or PostgreSQL through Docker Compose.
 - React/TypeScript dashboard with findings, scan history and audit trail.
-- Read-only Aegis security copilot grounded in current findings.
+- Optional read-only assistant API, outside the main audit interface.
 - Hashed API tokens, viewer/operator roles and server-selected tenant identity.
 - Tenant/source-isolated findings, transactional scan persistence and durable per-tenant scan locks.
 - Finding lifecycle reconciliation with acknowledged/resolved/reopened states and analyst controls in the dashboard.
@@ -36,10 +47,10 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 
 1. Install AWS CLI v2 and configure a short-lived IAM Identity Center/SSO profile on the PC.
 2. Deploy `infra/aws/aegisshield-readonly-role.yaml` in the AWS account with a unique External ID.
-3. Install AegisShield and open **Connect AWS account**.
+3. Installez AegisShield et ouvrez **Connexion AWS**.
 4. Enter the Role ARN, AWS Account ID, External ID, AWS profile name and default region. Optionally enable **Scan all enabled AWS regions**.
-5. Choose **Validate AWS role**; AegisShield performs STS AssumeRole and checks the resulting AWS Account ID.
-6. Save the connection and run an AWS scan.
+5. Choisissez **Valider et enregistrer** : le rôle est testé avant l’enregistrement.
+6. Revenez à la vue d’ensemble et cliquez sur **Lancer un audit**.
 
 No long-lived AWS access key needs to be stored by AegisShield.
 

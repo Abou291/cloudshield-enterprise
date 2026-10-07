@@ -79,8 +79,16 @@ export interface AuditEvent {
   timestamp: string;
 }
 
-export interface AssistantResponse { answer: string; model: string; findings_used: number; }
-export interface AssistantMessage { role: "user" | "assistant"; content: string; model?: string; }
+export interface AssistantResponse {
+  answer: string;
+  model: string;
+  findings_used: number;
+}
+export interface AssistantMessage {
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+}
 
 export interface Diagnostics {
   version: string;
@@ -130,7 +138,6 @@ export interface SecurityReport {
   findings: Finding[];
 }
 
-
 export interface AttackPathStep {
   finding_fingerprint: string;
   rule_id: string;
@@ -178,4 +185,13 @@ export interface ExecutiveSummary {
     severity: Severity;
     risk_score: number;
   }>;
+}
+
+export interface PostureSummary {
+  active: number;
+  severities: Record<Severity, number>;
+  states: Record<FindingStatus, number>;
+  highest_risk: number | null;
+  coverage_gaps: number;
+  latest_scan: ScanHistory | null;
 }

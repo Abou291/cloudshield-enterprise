@@ -76,7 +76,11 @@ class FindingRepository:
             record.last_seen_at = now
         self.db.flush()
 
-    def reconcile(self, findings: list[Finding]) -> None:
+    def reconcile(
+        self,
+        findings: list[Finding],
+        inspected_resources: set[tuple[str, str, str, str]] | None = None,
+    ) -> None:
         """Persist the current scan and resolve active findings no longer observed."""
         current_fingerprints = {finding.fingerprint for finding in findings}
         self.upsert_many(findings)
@@ -88,6 +92,10 @@ class FindingRepository:
             )
         ).all()
         for record in active_records:
+            if inspected_resources is not None and (
+                record.account_id, record.region, record.resource_type, record.resource_id
+            ) not in inspected_resources:
+                continue
             if record.fingerprint not in current_fingerprints:
                 record.status = FindingStatus.RESOLVED.value
         self.db.flush()
@@ -106,7 +114,7 @@ class FindingRepository:
     def list(
         self,
         severity: Severity | None = None,
-        limit: int = 100,
+        limit: int | None = 100,
         offset: int = 0,
         include_resolved: bool = False,
     ) -> list[Finding]:
