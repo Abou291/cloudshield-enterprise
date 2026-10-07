@@ -17,8 +17,8 @@ const fs = require("node:fs");
     const background = await page
       .locator(".sidebar")
       .evaluate((el) => getComputedStyle(el).backgroundColor);
-    if (background !== "rgb(255, 255, 255)")
-      throw Error("Light desktop styles did not load");
+    if (background !== "rgb(24, 24, 24)")
+      throw Error("VS Code workbench styles did not load");
     await page
       .getByRole("combobox", { name: "Source des résultats" })
       .selectOption("demo-fixture");
@@ -34,7 +34,7 @@ const fs = require("node:fs");
       path: "desktop/dist/screenshots/overview.png",
       fullPage: true,
     });
-    await page.getByRole("button", { name: /Plan de correction/ }).click();
+    await page.getByRole("button", { name: "Plan de correction", exact: true }).click();
     await page
       .getByRole("button", { name: /^Ouvrir / })
       .first()

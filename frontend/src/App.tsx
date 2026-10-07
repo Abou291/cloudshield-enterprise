@@ -728,14 +728,31 @@ function Dashboard({
       <a className="skip-link" href="#main-content">
         Aller au contenu
       </a>
+      <header className="workbench-titlebar">
+        <ShieldCheck size={18} />
+        <span>AegisShield</span>
+        <button className="command-entry" onClick={() => navigate("findings")}>
+          <Search size={14} /> Rechercher dans le plan de correction
+        </button>
+        <span className="workbench-title">Audit AWS</span>
+      </header>
+      <nav className="activity-bar" aria-label="Barre d’activité">
+        {(Object.entries(pages) as [Page, (typeof pages)[Page]][]).map(([key, item]) => (
+          <button key={key} className={page === key ? "activity active" : "activity"}
+            title={item.title} aria-label={`Afficher ${item.title}`}
+            aria-current={page === key ? "page" : undefined} onClick={() => navigate(key)}>
+            <item.icon size={24} strokeWidth={1.5} />
+          </button>
+        ))}
+      </nav>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
             <ShieldCheck size={23} />
           </span>
-          AegisShield
+          EXPLORATEUR
         </div>
-        <p className="edition">AUDIT DE SÉCURITÉ AWS</p>
+        <p className="edition">⌄ ESPACE DE TRAVAIL AWS</p>
         <nav aria-label="Navigation principale">
           {(Object.entries(pages) as [Page, (typeof pages)[Page]][]).map(
             ([key, item]) => (
@@ -788,6 +805,14 @@ function Dashboard({
         </div>
       </aside>
       <div className="workspace">
+        <nav className="editor-tabs" aria-label="Vues ouvertes">
+          {(Object.entries(pages) as [Page, (typeof pages)[Page]][]).map(([key, item]) => (
+            <button key={key} className={page === key ? "editor-tab active" : "editor-tab"}
+              aria-label={`Onglet ${item.title}`} aria-current={page === key ? "page" : undefined} onClick={() => navigate(key)}>
+              <item.icon size={14} /> <span>{item.title}</span>
+            </button>
+          ))}
+        </nav>
         <div className="topbar">
           <div className="breadcrumb">
             Espace de travail <ChevronRight size={14} />
@@ -1228,6 +1253,13 @@ function Dashboard({
           </footer>
         </main>
       </div>
+      <footer className="workbench-statusbar">
+        <span><ShieldCheck size={13} /> AegisShield</span>
+        <span>{source === "aws" ? "AWS" : "Démonstration"}</span>
+        <span>{busy ? "Audit en cours…" : "Prêt"}</span>
+        <span className="statusbar-right"><LockKeyhole size={12} /> Lecture seule</span>
+        <span>{summary ? `${summary.active} alertes actives` : "Aucun résultat chargé"}</span>
+      </footer>
       {selected && (
         <FindingDialog
           finding={selected}

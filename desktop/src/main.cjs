@@ -112,7 +112,7 @@ function createWindow() {
     minHeight: 720,
     title: "AegisShield",
     show: false,
-    backgroundColor: "#f6f8fb",
+    backgroundColor: "#1f1f1f",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
