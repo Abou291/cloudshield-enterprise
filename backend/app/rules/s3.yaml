@@ -16,6 +16,7 @@ rules:
     resource_type: s3_bucket
     severity: medium
     confidence: 0.85
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: encrypted
         operator: is_false
@@ -27,6 +28,7 @@ rules:
     resource_type: s3_bucket
     severity: low
     confidence: 0.80
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: logging_enabled
         operator: is_false
@@ -50,6 +52,7 @@ rules:
     resource_type: s3_bucket
     severity: low
     confidence: 0.90
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: versioning_enabled
         operator: is_false
@@ -61,6 +64,7 @@ rules:
     resource_type: s3_bucket
     severity: medium
     confidence: 0.90
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: enforces_tls
         operator: is_false

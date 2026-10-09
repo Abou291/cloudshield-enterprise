@@ -5,6 +5,7 @@ rules:
     resource_type: iam_user
     severity: high
     confidence: 0.95
+    context_factors: [privileged]
     conditions:
       - path: mfa_enabled
         operator: is_false
@@ -19,6 +20,7 @@ rules:
     resource_type: iam_user
     severity: critical
     confidence: 0.98
+    context_factors: [privileged]
     conditions:
       - path: administrator_access
         operator: is_true
@@ -30,6 +32,7 @@ rules:
     resource_type: iam_user
     severity: medium
     confidence: 0.90
+    context_factors: [privileged]
     conditions:
       - path: oldest_access_key_days
         operator: older_than_days

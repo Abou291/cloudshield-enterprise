@@ -5,6 +5,7 @@ rules:
     resource_type: aws_config_recorder
     severity: high
     confidence: 0.96
+    context_factors: []
     conditions:
       - path: recording
         operator: is_false
@@ -16,6 +17,7 @@ rules:
     resource_type: kms_key
     severity: medium
     confidence: 0.95
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: rotation_supported
         operator: is_true
@@ -40,6 +42,7 @@ rules:
     resource_type: iam_password_policy
     severity: medium
     confidence: 0.95
+    context_factors: []
     conditions:
       - path: configured
         operator: is_false
@@ -51,6 +54,7 @@ rules:
     resource_type: ebs_account_settings
     severity: medium
     confidence: 0.97
+    context_factors: []
     conditions:
       - path: encryption_by_default
         operator: is_false
@@ -62,6 +66,7 @@ rules:
     resource_type: vpc
     severity: medium
     confidence: 0.90
+    context_factors: []
     conditions:
       - path: flow_logs_enabled
         operator: is_false
@@ -73,6 +78,7 @@ rules:
     resource_type: securityhub
     severity: medium
     confidence: 0.95
+    context_factors: []
     conditions:
       - path: enabled
         operator: is_false
@@ -84,6 +90,7 @@ rules:
     resource_type: iam_account
     severity: critical
     confidence: 0.99
+    context_factors: [privileged]
     conditions:
       - path: root_mfa_enabled
         operator: is_false
@@ -95,6 +102,7 @@ rules:
     resource_type: iam_account
     severity: critical
     confidence: 0.99
+    context_factors: [privileged]
     conditions:
       - path: root_access_keys_present
         operator: is_true
@@ -106,6 +114,7 @@ rules:
     resource_type: ebs_volume
     severity: high
     confidence: 0.95
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: encrypted
         operator: is_false
@@ -128,6 +137,7 @@ rules:
     resource_type: rds_instance
     severity: high
     confidence: 0.95
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: storage_encrypted
         operator: is_false
@@ -139,6 +149,7 @@ rules:
     resource_type: rds_instance
     severity: high
     confidence: 0.96
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: backup_retention_days
         operator: equals
@@ -151,6 +162,7 @@ rules:
     resource_type: rds_instance
     severity: low
     confidence: 0.90
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: deletion_protection
         operator: is_false
@@ -162,6 +174,7 @@ rules:
     resource_type: cloudtrail
     severity: high
     confidence: 0.97
+    context_factors: []
     conditions:
       - path: logging
         operator: is_false
@@ -169,22 +182,28 @@ rules:
 
   - id: CT-002
     name: CloudTrail is not multi-Region
-    description: The CloudTrail trail does not cover all Regions.
+    description: An active CloudTrail trail does not cover all Regions. Reported only when the trail is logging; a missing or stopped trail is covered by CT-001.
     resource_type: cloudtrail
     severity: medium
     confidence: 0.90
+    context_factors: []
     conditions:
+      - path: logging
+        operator: is_true
       - path: multi_region
         operator: is_false
     remediation: Configure an organization or multi-Region trail unless a documented architecture requires otherwise.
 
   - id: CT-003
     name: CloudTrail log file validation disabled
-    description: CloudTrail log file integrity validation is disabled.
+    description: CloudTrail log file integrity validation is disabled on an active trail. A missing or stopped trail is covered by CT-001.
     resource_type: cloudtrail
     severity: low
     confidence: 0.90
+    context_factors: []
     conditions:
+      - path: logging
+        operator: is_true
       - path: log_file_validation
         operator: is_false
     remediation: Enable CloudTrail log file validation to strengthen log integrity assurance.
@@ -195,6 +214,7 @@ rules:
     resource_type: guardduty_detector
     severity: high
     confidence: 0.97
+    context_factors: []
     conditions:
       - path: enabled
         operator: is_false
@@ -217,6 +237,8 @@ rules:
     resource_type: coverage_gap
     severity: medium
     confidence: 0.99
+    context_factors: []
+    evidence_fields: [service, reason]
     conditions:
       - path: available
         operator: is_false

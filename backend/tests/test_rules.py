@@ -33,3 +33,38 @@ def test_finding_fingerprint_is_stable() -> None:
     second = [finding.fingerprint for finding in engine.evaluate(assets)]
 
     assert first == second
+
+
+def test_attack_paths_need_two_findings_on_the_same_resource():
+    from app.core.domain import Finding, RiskBreakdown, Severity
+    from app.services.reporting import build_attack_paths
+
+    def finding(resource: str, rule: str, **factors: float) -> Finding:
+        return Finding(
+            fingerprint=f"{resource}-{rule}".ljust(64, "x"),
+            source="aws",
+            rule_id=rule,
+            title=rule,
+            description=rule,
+            severity=Severity.HIGH,
+            resource_id=resource,
+            resource_type="s3_bucket",
+            account_id="111111111111",
+            region="eu-west-3",
+            evidence={},
+            recommendation="fix",
+            risk=RiskBreakdown(score=80, reasons=[], factors=factors),
+        )
+
+    same = [
+        finding("bucket-a", "S3-001", internet_exposure=1.0, sensitive_data=1.0),
+        finding("bucket-a", "S3-002", internet_exposure=1.0, sensitive_data=1.0),
+    ]
+    assert [p["kind"] for p in build_attack_paths(same)] == ["exposed-sensitive-resource"]
+
+    scattered = [
+        finding("bucket-a", "S3-001", internet_exposure=1.0),
+        finding("bucket-b", "S3-002", sensitive_data=1.0),
+        finding("role-c", "IAM-002", privileged=1.0),
+    ]
+    assert build_attack_paths(scattered) == []

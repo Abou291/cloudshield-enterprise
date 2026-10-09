@@ -89,7 +89,7 @@ def test_risk_reasons_show_where_context_came_from() -> None:
     result = RiskEngine().score(Severity.MEDIUM, item, confidence=0.9)
     assert "Production asset +15 (tag Environment=prod)" in result.reasons
     assert "Sensitive data +18 (tag DataClassification=restricted)" in result.reasons
-    assert result.score == 20 + 15 + 18 + 9
+    assert result.score == 43
 
 
 def test_declared_context_keeps_the_original_reason_text() -> None:

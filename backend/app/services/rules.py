@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.domain import Asset, Finding, Severity
-from app.services.risk import RiskEngine
+from app.services.risk import FACTOR_KEYS, RiskEngine
 
 
 class RuleCondition(BaseModel):
@@ -25,6 +25,18 @@ class Rule(BaseModel):
     confidence: float = Field(ge=0, le=1)
     conditions: list[RuleCondition]
     remediation: str
+    # Context factors that make this rule riskier (None = exposure, production, sensitive data).
+    context_factors: list[str] | None = None
+    # Extra attribute paths copied into the finding evidence (for example why a check failed).
+    evidence_fields: list[str] = Field(default_factory=list)
+
+    @field_validator("context_factors")
+    @classmethod
+    def _known_factors(cls, value: list[str] | None) -> list[str] | None:
+        unknown = set(value or []) - set(FACTOR_KEYS)
+        if unknown:
+            raise ValueError(f"Unknown context factors: {sorted(unknown)}")
+        return value
 
 
 def _get_path(document: dict[str, Any], path: str) -> Any:
@@ -105,6 +117,8 @@ class RuleEngine:
                     condition.path: _get_path(asset.attributes, condition.path)
                     for condition in rule.conditions
                 }
+                for extra in rule.evidence_fields:
+                    evidence[extra] = _get_path(asset.attributes, extra)
                 if any(c.operator == "tcp_port_in_range" for c in rule.conditions):
                     evidence["protocol"] = asset.attributes.get("protocol", "tcp")
                     evidence["to_port"] = asset.attributes.get(
@@ -126,7 +140,9 @@ class RuleEngine:
                         region=asset.region,
                         evidence=json.loads(json.dumps(evidence, default=str)),
                         recommendation=rule.remediation,
-                        risk=self.risk_engine.score(rule.severity, asset, rule.confidence),
+                        risk=self.risk_engine.score(
+                            rule.severity, asset, rule.confidence, rule.context_factors
+                        ),
                     )
                 )
         return sorted(findings, key=lambda finding: finding.risk.score, reverse=True)

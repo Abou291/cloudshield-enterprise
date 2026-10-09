@@ -5,6 +5,7 @@ rules:
     resource_type: iam_role
     severity: high
     confidence: 0.97
+    context_factors: [privileged]
     conditions:
       - path: administrator_access
         operator: is_true
@@ -31,6 +32,7 @@ rules:
     resource_type: ecr_repository
     severity: medium
     confidence: 0.86
+    context_factors: [production_asset]
     conditions:
       - path: scan_on_push
         operator: is_false
@@ -42,6 +44,7 @@ rules:
     resource_type: secret
     severity: medium
     confidence: 0.88
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: rotation_enabled
         operator: is_false
@@ -67,6 +70,7 @@ rules:
     resource_type: eks_cluster
     severity: medium
     confidence: 0.96
+    context_factors: [production_asset]
     conditions:
       - path: audit_logging_enabled
         operator: is_false

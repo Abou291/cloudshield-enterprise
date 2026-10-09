@@ -2,40 +2,60 @@ from dataclasses import dataclass
 
 from app.core.domain import Asset, RiskBreakdown, Severity
 
+# Context factors a rule may declare as relevant to its own risk.
+FACTOR_KEYS = ("internet_exposure", "production_asset", "sensitive_data", "privileged")
+# Used when a rule does not declare its own list. Administrative privilege only matters for
+# identity checks, so it must be requested explicitly.
+DEFAULT_FACTORS = ("internet_exposure", "production_asset", "sensitive_data")
+
 
 @dataclass(frozen=True)
 class RiskWeights:
-    severity: dict[Severity, int]
+    """Severity fixes the band of the score; context only moves it inside that band."""
+
+    bands: dict[Severity, tuple[int, int]]
     exposure: int = 22
     production: int = 15
     sensitive_data: int = 18
     privileged: int = 15
-    high_confidence: int = 10
+    # Share of the position inside the band that comes from detection confidence.
+    confidence_share: float = 0.3
+    # Position used when a rule has no relevant context factor (account-level checks).
+    neutral_context: float = 0.5
 
 
 DEFAULT_WEIGHTS = RiskWeights(
-    severity={
-        Severity.LOW: 8,
-        Severity.MEDIUM: 20,
-        Severity.HIGH: 30,
-        Severity.CRITICAL: 40,
+    bands={
+        Severity.LOW: (1, 25),
+        Severity.MEDIUM: (26, 50),
+        Severity.HIGH: (51, 75),
+        Severity.CRITICAL: (76, 100),
     }
 )
 
 
 class RiskEngine:
-    """Computes a bounded and explainable contextual score.
+    """Computes a bounded, explainable score ordered first by severity, then by context.
 
-    An additive model is deliberately used in V1 because it is easier to audit,
-    tune and explain than an arbitrary multiplication of ordinal factors.
+    The band is set by the technical severity, so a low-severity finding on a sensitive
+    production asset can never outrank a high-severity finding. Inside the band, the
+    position combines the context factors that matter for the rule (a missing bucket
+    access log is not made riskier by the bucket being internet-facing) and the
+    detection confidence. The decomposition stays additive and auditable.
     """
 
     def __init__(self, weights: RiskWeights = DEFAULT_WEIGHTS) -> None:
         self.weights = weights
 
-    def score(self, severity: Severity, asset: Asset, confidence: float) -> RiskBreakdown:
-        reasons = [f"Technical severity ({severity.value}) +{self.weights.severity[severity]}"]
-        score = self.weights.severity[severity]
+    def score(
+        self,
+        severity: Severity,
+        asset: Asset,
+        confidence: float,
+        relevant_factors: tuple[str, ...] | list[str] | None = None,
+    ) -> RiskBreakdown:
+        low, high = self.weights.bands[severity]
+        relevant = set(DEFAULT_FACTORS if relevant_factors is None else relevant_factors)
 
         exposure = bool(asset.context.get("internet_exposed"))
         production = asset.context.get("environment") == "production"
@@ -43,7 +63,7 @@ class RiskEngine:
         privileged = bool(asset.context.get("privileged"))
 
         factors = {
-            "technical_severity": float(self.weights.severity[severity]),
+            "technical_severity": float(low),
             "internet_exposure": float(exposure),
             "production_asset": float(production),
             "sensitive_data": float(sensitive_data),
@@ -60,14 +80,26 @@ class RiskEngine:
             ("Sensitive data", sensitive_data, self.weights.sensitive_data, "sensitive_data"),
             ("Administrative privilege", privileged, self.weights.privileged, "privileged"),
         )
-        for label, enabled, points, source_key in contextual:
+        reasons = [f"Technical severity ({severity.value}) sets the {low}-{high} band"]
+        applied = 0
+        available = 0
+        for label, enabled, points, key in contextual:
+            if key not in relevant:
+                continue
+            available += points
             if enabled:
-                score += points
-                origin = sources.get(source_key)
+                applied += points
+                origin = sources.get(key)
                 reasons.append(f"{label} +{points}" + (f" ({origin})" if origin else ""))
 
-        confidence_points = round(self.weights.high_confidence * max(0.0, min(1.0, confidence)))
-        score += confidence_points
-        reasons.append(f"Detection confidence ({confidence:.0%}) +{confidence_points}")
+        clamped = max(0.0, min(1.0, confidence))
+        context_position = applied / available if available else self.weights.neutral_context
+        share = self.weights.confidence_share
+        position = (1 - share) * context_position + share * clamped
+        score = low + round((high - low) * position)
 
-        return RiskBreakdown(score=min(score, 100), reasons=reasons, factors=factors)
+        if not available:
+            reasons.append("No context factor applies to this check: neutral position in band")
+        reasons.append(f"Detection confidence ({clamped:.0%}) shapes {share:.0%} of the position")
+        factors["band_position"] = round(position, 2)
+        return RiskBreakdown(score=min(score, high), reasons=reasons, factors=factors)

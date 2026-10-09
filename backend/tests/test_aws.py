@@ -682,3 +682,37 @@ def test_programmatic_only_user_without_mfa_is_not_flagged_but_console_user_is()
     engine = RuleEngine.from_directory(APP_ROOT / "rules")
     assert engine.evaluate([user(False)]) == []
     assert {f.rule_id for f in engine.evaluate([user(True)])} == {"IAM-001"}
+
+
+def test_missing_cloudtrail_yields_one_finding_not_three():
+    asset = Asset(
+        resource_id="cloudtrail:none:eu-west-3",
+        resource_type="cloudtrail",
+        name="No CloudTrail trail",
+        attributes={"logging": False, "multi_region": False, "log_file_validation": False},
+    )
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate([asset])
+    assert {finding.rule_id for finding in findings} == {"CT-001"}
+
+
+def test_active_trail_still_reports_multi_region_and_validation_gaps():
+    asset = Asset(
+        resource_id="trail",
+        resource_type="cloudtrail",
+        name="trail",
+        attributes={"logging": True, "multi_region": False, "log_file_validation": False},
+    )
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate([asset])
+    assert {finding.rule_id for finding in findings} == {"CT-002", "CT-003"}
+
+
+def test_coverage_gap_finding_says_which_service_and_why():
+    asset = Asset(
+        resource_id="coverage:guardduty:eu-west-3",
+        resource_type="coverage_gap",
+        name="guardduty",
+        attributes={"service": "guardduty", "reason": "AccessDeniedException", "available": False},
+    )
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate([asset])
+    assert findings[0].evidence["service"] == "guardduty"
+    assert findings[0].evidence["reason"] == "AccessDeniedException"
