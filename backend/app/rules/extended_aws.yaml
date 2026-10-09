@@ -5,6 +5,7 @@ rules:
     resource_type: iam_role
     severity: high
     confidence: 0.97
+    context_factors: [privileged]
     conditions:
       - path: administrator_access
         operator: is_true
@@ -31,6 +32,7 @@ rules:
     resource_type: ecr_repository
     severity: medium
     confidence: 0.86
+    context_factors: [production_asset]
     conditions:
       - path: scan_on_push
         operator: is_false
@@ -42,6 +44,7 @@ rules:
     resource_type: secret
     severity: medium
     confidence: 0.88
+    context_factors: [production_asset, sensitive_data]
     conditions:
       - path: rotation_enabled
         operator: is_false
@@ -67,6 +70,7 @@ rules:
     resource_type: eks_cluster
     severity: medium
     confidence: 0.96
+    context_factors: [production_asset]
     conditions:
       - path: audit_logging_enabled
         operator: is_false
@@ -84,3 +88,30 @@ rules:
       - path: tls_listener
         operator: is_false
     remediation: Terminate TLS at the load balancer or document the upstream TLS termination point and enforce encrypted transport end to end.
+
+  - id: EC2-003
+    name: Internet-reachable instance runs with an administrator role
+    description: The instance has a public IP address and an instance profile whose role has AdministratorAccess attached directly, so a compromise of the instance gives control of the account.
+    resource_type: ec2_instance
+    severity: high
+    confidence: 0.9
+    context_factors: [internet_exposure, production_asset, privileged]
+    conditions:
+      - path: public_ip_assigned
+        operator: is_true
+      - path: admin_instance_profile
+        operator: is_true
+    remediation: Replace AdministratorAccess on the instance role with the minimum permissions, and remove the public IP or restrict inbound rules.
+
+  - id: ACM-001
+    name: ACM certificate expires within 30 days
+    description: A certificate is close to expiry, which usually means automatic renewal is failing or the certificate was imported and is not renewed automatically.
+    resource_type: acm_certificate
+    severity: medium
+    confidence: 0.9
+    context_factors: [production_asset]
+    conditions:
+      - path: days_to_expiry
+        operator: at_most
+        value: 30
+    remediation: Check the DNS or email validation records for managed certificates, or re-import a renewed certificate.

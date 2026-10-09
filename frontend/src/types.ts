@@ -179,3 +179,29 @@ export interface ExecutiveSummary {
     risk_score: number;
   }>;
 }
+
+export type MonitorStatus = {
+  status: string;
+  last_run_at: string | null;
+  stale: boolean;
+  interval_seconds?: number;
+  webhook_configured?: boolean;
+  open_alerts?: number;
+  events_seen?: number;
+  alerts_new?: number;
+  errors: string[];
+};
+
+export type MonitorAlert = {
+  alert_id: string;
+  rule_id: string;
+  title: string;
+  severity: string;
+  source: string;
+  occurred_at: string;
+  principal: string;
+  source_ip: string;
+  region: string;
+  summary: string;
+  status: string;
+};

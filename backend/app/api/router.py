@@ -18,8 +18,12 @@ from app.core.domain import (
     ScanResult,
     Severity,
 )
-from app.db.models import AuditRecord, ScanRecord
+from app.db.models import AlertRecord, AuditRecord, MonitorState, ScanRecord
 from app.db.session import engine, get_db
+from app.monitoring.events import Alert
+from app.monitoring.notify import send_webhook, validate_webhook_url
+from app.monitoring.runtime import build_service
+from app.monitoring.service import health as monitor_health
 from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
 from app.services.assistant import ask_llm
@@ -179,9 +183,8 @@ def diagnostics(db: DatabaseSession, principal: Identity) -> dict:
     settings = get_settings()
     result = base_diagnostics(db, settings)
     result["tenant_id"] = principal.tenant_id
-    result["aws_configured"] = (
-        principal.tenant_id in settings.aws_connections
-        or (settings.desktop_mode and local_connection() is not None)
+    result["aws_configured"] = principal.tenant_id in settings.aws_connections or (
+        settings.desktop_mode and local_connection() is not None
     )
     return result
 
@@ -419,3 +422,101 @@ def run_aws_scan(db: DatabaseSession, principal: Operator) -> ScanResult:
             principal,
         )
     )
+
+
+def _monitor_connection(principal: Identity) -> AwsConnection:
+    settings = get_settings()
+    connection = settings.aws_connections.get(principal.tenant_id) or local_connection()
+    if connection is None or (principal.demo and not settings.desktop_mode):
+        raise HTTPException(403, "Monitoring requires an authenticated, configured organization")
+    return connection
+
+
+@router.get("/monitoring/status")
+def monitoring_status(db: DatabaseSession, principal: Identity) -> dict:
+    settings = get_settings()
+    state = db.get(MonitorState, principal.tenant_id)
+    open_alerts = db.scalars(
+        select(AlertRecord).where(
+            AlertRecord.tenant_id == principal.tenant_id, AlertRecord.status == "open"
+        )
+    ).all()
+    summary = _monitor_health(state, settings.monitor_interval_seconds)
+    summary["interval_seconds"] = settings.monitor_interval_seconds
+    summary["webhook_configured"] = bool(settings.monitor_webhook_url)
+    summary["open_alerts"] = len(open_alerts)
+    return summary
+
+
+def _monitor_health(state: MonitorState | None, interval_seconds: int) -> dict:
+    return monitor_health(state, interval_seconds, datetime.now(UTC))
+
+
+@router.get("/monitoring/alerts")
+def monitoring_alerts(
+    db: DatabaseSession,
+    principal: Identity,
+    status_filter: Annotated[Literal["open", "acknowledged"] | None, Query(alias="status")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[dict]:
+    query = select(AlertRecord).where(AlertRecord.tenant_id == principal.tenant_id)
+    if status_filter:
+        query = query.where(AlertRecord.status == status_filter)
+    rows = db.scalars(query.order_by(AlertRecord.occurred_at.desc()).limit(limit))
+    return [
+        {
+            "alert_id": r.alert_id,
+            "rule_id": r.rule_id,
+            "title": r.title,
+            "severity": r.severity,
+            "source": r.source,
+            "occurred_at": r.occurred_at.isoformat(),
+            "principal": r.principal,
+            "source_ip": r.source_ip,
+            "region": r.region,
+            "summary": r.summary,
+            "status": r.status,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/monitoring/alerts/{alert_id}/ack")
+def acknowledge_alert(alert_id: str, db: DatabaseSession, principal: Operator) -> dict:
+    record = db.get(AlertRecord, (principal.tenant_id, alert_id))
+    if record is None:
+        raise HTTPException(404, "Alert not found")
+    record.status = "acknowledged"
+    db.commit()
+    return {"alert_id": alert_id, "status": record.status}
+
+
+@router.post("/monitoring/run")
+def monitoring_run(db: DatabaseSession, principal: Operator) -> dict:
+    connection = _monitor_connection(principal)
+    try:
+        service = build_service(db, principal.tenant_id, connection, get_settings())
+    except Exception as exc:
+        code, message = classify_aws_error(exc)
+        raise HTTPException(422, f"{code}: {message}") from exc
+    return service.run_cycle()
+
+
+@router.post("/monitoring/test-webhook")
+def monitoring_test_webhook(principal: Operator) -> dict:
+    url = get_settings().monitor_webhook_url
+    if not url:
+        raise HTTPException(409, "No webhook configured (CLOUDSHIELD_MONITOR_WEBHOOK_URL)")
+    validate_webhook_url(url)
+    test = Alert(
+        rule_id="TEST",
+        title="AegisShield webhook test",
+        severity="low",
+        occurred_at=datetime.now(UTC),
+        principal="test",
+        source_ip="",
+        region="",
+        summary="This is a test notification; no action is required.",
+        dedupe_key="test",
+    )
+    return {"delivered": send_webhook(url, [test])}

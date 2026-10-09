@@ -64,6 +64,8 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("iam", self._collect_iam),
             ("iam-password-policy", self._collect_iam_password_policy),
             ("iam-roles", self._collect_iam_roles),
+            ("iam-policies", self._collect_iam_policies),
+            ("iam-instance-profiles", self._collect_instance_profiles),
             ("s3", self._collect_s3),
         ]
         regional_collectors: list[tuple[str, Callable[[], list[Asset]]]] = [
@@ -84,6 +86,7 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("secrets-manager", self._collect_secrets_manager),
             ("eks", self._collect_eks),
             ("load-balancers", self._collect_load_balancers),
+            ("acm", self._collect_acm_certificates),
         ]
         assets: list[Asset] = []
         for service, collector in global_collectors:
@@ -104,6 +107,7 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                     assets.extend(self._safe_collect(service, collector))
         finally:
             self.region = configured_region
+        self._link_instance_privileges(assets)
         return assets
 
     def _enabled_regions(self) -> list[str]:
@@ -209,6 +213,7 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                     attributes={
                         "mfa_enabled": mfa_enabled,
                         "oldest_access_key_days": oldest_key_days,
+                        "active_access_keys": len(keys),
                         "administrator_access": administrator,
                         "console_access": self._user_has_console_access(iam, username),
                     },
@@ -285,6 +290,7 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                             s3, name
                         ),
                         "enforces_tls": self._bucket_enforces_tls(s3, name),
+                        "acl_public": self._bucket_acl_public(s3, name),
                     },
                     context={
                         "internet_exposed": public,
@@ -690,6 +696,16 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                     )
                 )
         return assets
+
+    @staticmethod
+    def _bucket_acl_public(s3: BaseClient, name: str) -> bool:
+        """True when the bucket ACL grants access to AllUsers or AuthenticatedUsers."""
+        public_groups = {
+            "http://acs.amazonaws.com/groups/global/AllUsers",
+            "http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
+        }
+        grants = s3.get_bucket_acl(Bucket=name).get("Grants", [])
+        return any(grant.get("Grantee", {}).get("URI") in public_groups for grant in grants)
 
     @staticmethod
     def _bucket_tags(s3: BaseClient, name: str) -> dict[str, str]:

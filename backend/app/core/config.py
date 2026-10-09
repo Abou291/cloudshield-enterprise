@@ -40,9 +40,7 @@ class AwsConnection(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="CLOUDSHIELD_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="CLOUDSHIELD_", env_file=".env", extra="ignore")
 
     app_name: str = "AegisShield"
     env: Literal["development", "test", "production"] = "development"
@@ -66,6 +64,8 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=120, ge=10, le=10000)
     max_request_body_bytes: int = Field(default=1_048_576, ge=16_384, le=10_485_760)
     trusted_hosts: list[str] = ["127.0.0.1", "localhost"]
+    monitor_interval_seconds: int = Field(default=900, ge=60, le=86400)
+    monitor_webhook_url: str | None = None
 
     @model_validator(mode="after")
     def validate_security(self) -> "Settings":
@@ -93,9 +93,7 @@ class Settings(BaseSettings):
                 raise ValueError("Production AI provider must use HTTPS")
             allowed = {host.lower() for host in self.ai_allowed_hosts}
             if hostname not in allowed:
-                raise ValueError(
-                    "Production AI provider host must be explicitly allowlisted"
-                )
+                raise ValueError("Production AI provider host must be explicitly allowlisted")
         elif parsed.scheme == "http" and hostname not in {"localhost", "127.0.0.1"}:
             raise ValueError("Plain HTTP AI providers are allowed only on loopback")
 

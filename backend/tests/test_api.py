@@ -85,11 +85,12 @@ def test_risk_intelligence_endpoints_correlate_demo_findings(client: TestClient)
     assert payload["critical"] == 2
     assert payload["internet_exposed"] >= 1
     assert payload["privileged"] >= 1
-    assert payload["attack_path_candidates"] >= 2
+    assert payload["attack_path_candidates"] >= 1
 
     assert paths.status_code == 200
     path_payload = paths.json()
-    assert len(path_payload) >= 2
+    assert len(path_payload) >= 1
     assert all(item["confidence"] == "candidate" for item in path_payload)
     assert all("does not prove" in item["caveat"] for item in path_payload)
-    assert any(item["kind"] == "exposure-to-privilege" for item in path_payload)
+    assert any(item["kind"] == "exposed-sensitive-resource" for item in path_payload)
+    assert all(len({step["resource_id"] for step in item["steps"]}) == 1 for item in path_payload)

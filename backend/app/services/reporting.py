@@ -12,73 +12,79 @@ def _candidate_id(kind: str, findings: list[Finding]) -> str:
     return hashlib.sha256(f"{kind}|{material}".encode()).hexdigest()[:24]
 
 
-def build_attack_paths(findings: list[Finding]) -> list[dict]:
-    """Build conservative attack-path candidates from correlated posture signals.
+def _flag(item: Finding, factor: str) -> bool:
+    return item.risk.factors.get(factor, 0) > 0
 
-    These are prioritization hints, not proof of network or IAM reachability.
-    AegisShield only emits a path when multiple independent findings increase
-    the impact of the same AWS account.
+
+def build_attack_paths(findings: list[Finding]) -> list[dict]:
+    """Build conservative attack-path candidates from signals on the SAME resource.
+
+    A candidate is emitted only when one resource is both reachable from the Internet
+    and carries sensitive data or administrative privilege, and has at least two active
+    findings. Co-presence of unrelated findings in the same account is deliberately not
+    enough. These are prioritization hints, not proof of exploitability.
     """
     active = [item for item in findings if item.status != FindingStatus.RESOLVED]
-    by_account: dict[str, list[Finding]] = defaultdict(list)
+    by_resource: dict[tuple[str, str, str], list[Finding]] = defaultdict(list)
     for item in active:
-        by_account[item.account_id].append(item)
+        by_resource[(item.account_id, item.region, item.resource_id)].append(item)
+
+    kinds = (
+        (
+            "exposed-sensitive-resource",
+            "sensitive_data",
+            "Internet-exposed resource holding sensitive data",
+            (
+                "The same resource is reachable from the Internet and holds data marked "
+                "sensitive, and it has several active findings. A compromise of this entry "
+                "point would expose that data."
+            ),
+            (
+                "Remove public access first, then fix the remaining findings on the resource "
+                "(encryption, logging, transport security)."
+            ),
+        ),
+        (
+            "exposed-privileged-resource",
+            "privileged",
+            "Internet-exposed resource with administrative privilege",
+            (
+                "The same resource is reachable from the Internet and runs with administrative "
+                "privilege, and it has several active findings. Compromising it would give "
+                "broad access to the account."
+            ),
+            (
+                "Restrict exposure, then replace administrative permissions with a "
+                "least-privilege role."
+            ),
+        ),
+    )
 
     candidates: list[dict] = []
-    for account_id, account_findings in by_account.items():
-        exposed = sorted(
-            (
-                item
-                for item in account_findings
-                if item.risk.factors.get("internet_exposure", 0) > 0
-            ),
-            key=lambda item: item.risk.score,
-            reverse=True,
-        )
-        privileged = sorted(
-            (
-                item
-                for item in account_findings
-                if item.risk.factors.get("privileged", 0) > 0
-            ),
-            key=lambda item: item.risk.score,
-            reverse=True,
-        )
-        sensitive = sorted(
-            (
-                item
-                for item in account_findings
-                if item.risk.factors.get("sensitive_data", 0) > 0
-            ),
-            key=lambda item: item.risk.score,
-            reverse=True,
-        )
-
-        def append_candidate(
-            kind: str,
-            title: str,
-            rationale: str,
-            remediation: str,
-            chain: list[Finding],
-            candidate_account_id: str = account_id,
-        ) -> None:
-            unique = list({item.fingerprint: item for item in chain}.values())
-            if len(unique) < 2:
-                return
-            average = sum(item.risk.score for item in unique) / len(unique)
+    for (account_id, _region, _resource), group in by_resource.items():
+        if len(group) < 2:
+            continue
+        ranked = sorted(group, key=lambda item: item.risk.score, reverse=True)
+        if not _flag(ranked[0], "internet_exposure"):
+            continue
+        for kind, factor, title, rationale, remediation in kinds:
+            if not _flag(ranked[0], factor):
+                continue
+            chain = ranked[:4]
+            average = sum(item.risk.score for item in chain) / len(chain)
             score = min(100, round(average + 10))
             candidates.append(
                 {
-                    "path_id": _candidate_id(kind, unique),
+                    "path_id": _candidate_id(kind, chain),
                     "kind": kind,
                     "title": title,
-                    "account_id": candidate_account_id,
+                    "account_id": account_id,
                     "severity": "critical" if score >= 90 else "high",
                     "score": score,
                     "confidence": "candidate",
                     "rationale": rationale,
                     "caveat": (
-                        "Correlated posture signals only; this does not prove "
+                        "Correlated posture signals on one resource only; this does not prove "
                         "network reachability, credential compromise, or exploitability."
                     ),
                     "steps": [
@@ -91,62 +97,10 @@ def build_attack_paths(findings: list[Finding]) -> list[dict]:
                             "region": item.region,
                             "risk_score": item.risk.score,
                         }
-                        for item in unique
+                        for item in chain
                     ],
                     "remediation": remediation,
                 }
-            )
-
-        if exposed and privileged:
-            append_candidate(
-                "exposure-to-privilege",
-                "Internet exposure combined with privileged identity risk",
-                (
-                    "The same AWS account contains an internet-exposed finding and "
-                    "a privileged IAM finding. If the exposed workload is compromised, "
-                    "excessive privileges can increase blast radius."
-                ),
-                (
-                    "Reduce public exposure first, then remove unnecessary administrative "
-                    "permissions and validate workload identity boundaries."
-                ),
-                [exposed[0], privileged[0]],
-            )
-        if exposed and sensitive:
-            append_candidate(
-                "exposure-to-sensitive-data",
-                "Internet exposure combined with sensitive-data risk",
-                (
-                    "The account contains both an internet-exposed finding and a "
-                    "sensitive-data finding, increasing potential impact if an exposed "
-                    "entry point is compromised."
-                ),
-                (
-                    "Restrict public access, validate segmentation and access paths, "
-                    "then rotate or harden the affected sensitive data controls."
-                ),
-                [exposed[0], sensitive[0]],
-            )
-
-        critical = sorted(
-            (item for item in account_findings if item.severity.value == "critical"),
-            key=lambda item: item.risk.score,
-            reverse=True,
-        )
-        if len(critical) >= 2:
-            append_candidate(
-                "critical-risk-cluster",
-                "Multiple critical risks concentrated in one AWS account",
-                (
-                    "Several independent critical findings are concentrated in the same "
-                    "AWS account. This increases operational blast radius even when a "
-                    "direct exploit chain has not been proven."
-                ),
-                (
-                    "Treat the account as a priority remediation scope, starting with "
-                    "internet exposure and privileged identities before lower-impact issues."
-                ),
-                critical[:3],
             )
 
     return sorted(candidates, key=lambda item: (item["score"], item["path_id"]), reverse=True)

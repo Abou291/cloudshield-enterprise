@@ -11,9 +11,9 @@ frameworks:
       - {id: "1.8", title: "IAM password policy requires a strong minimum length", rules: [IAM-006]}
       - {id: "1.10", title: "MFA is enabled for all IAM users with a console password", rules: [IAM-001]}
       - {id: "1.14", title: "Access keys are rotated every 90 days or less", rules: [IAM-003]}
-      - {id: "1.16", title: "No IAM policy grants full administrative privileges", rules: [IAM-002, IAM-007]}
+      - {id: "1.16", title: "No IAM policy grants full administrative privileges", rules: [IAM-002, IAM-007, IAM-010]}
       - {id: "2.1.1", title: "S3 buckets deny HTTP requests", rules: [S3-006]}
-      - {id: "2.1.4", title: "S3 Block Public Access is enabled", rules: [S3-001, S3-004]}
+      - {id: "2.1.4", title: "S3 Block Public Access is enabled", rules: [S3-001, S3-004, S3-007]}
       - {id: "2.2.1", title: "EBS volume encryption is enabled", rules: [EBS-001, EBS-002]}
       - {id: "2.3.1", title: "RDS instances are encrypted at rest", rules: [RDS-002]}
       - {id: "2.3.3", title: "RDS instances are not publicly accessible", rules: [RDS-001]}
@@ -31,8 +31,10 @@ frameworks:
     controls:
       - {id: "IAM.4", title: "IAM root user access key should not exist", rules: [IAM-005]}
       - {id: "IAM.9", title: "MFA should be enabled for the root user", rules: [IAM-004]}
+      - {id: "IAM.1", title: "IAM policies should not allow full administrative privileges", rules: [IAM-010]}
       - {id: "IAM.3", title: "IAM users' access keys should be rotated every 90 days", rules: [IAM-003]}
       - {id: "S3.5", title: "S3 buckets should require requests to use SSL", rules: [S3-006]}
+      - {id: "ACM.1", title: "ACM certificates should be renewed after a specified time period", rules: [ACM-001]}
       - {id: "EC2.1", title: "EBS snapshots should not be publicly restorable", rules: [EBS-003]}
       - {id: "EC2.6", title: "VPC flow logging should be enabled in all VPCs", rules: [VPC-001]}
       - {id: "EC2.7", title: "EBS default encryption should be enabled", rules: [EBS-002]}

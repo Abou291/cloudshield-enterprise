@@ -26,14 +26,21 @@ def _pseudonym(value: str) -> str:
     return "anon-" + hashlib.sha256(value.encode()).hexdigest()[:10]
 
 
+# Evidence keys that describe the scanner itself, never the customer's resources.
+SAFE_EVIDENCE_KEYS = ("service", "reason", "available")
+
+
 def anonymize(findings: list[Finding]) -> list[Finding]:
-    """Replace account ids and resource identifiers by stable hashes (rule ids are kept)."""
+    """Replace account ids and resource identifiers by stable hashes (rule ids are kept).
+
+    Evidence is dropped except for scanner-level keys, so a coverage gap still says why.
+    """
     result = []
     for finding in findings:
         data = finding.model_copy(deep=True)
         data.account_id = _pseudonym(finding.account_id)
         data.resource_id = _pseudonym(finding.resource_id)
-        data.evidence = {}
+        data.evidence = {k: v for k, v in finding.evidence.items() if k in SAFE_EVIDENCE_KEYS}
         result.append(data)
     return result
 

@@ -4,6 +4,7 @@ import { Activity, Cloud, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-r
 import { ApiError, listAudit, listFindings, listScans, runAwsScan, runDemoScan, saveAwsConnection, testAwsConnection, updateFindingStatus } from "./api";
 import AccessGate from "./AccessGate";
 import DiagnosticsPanel from "./DiagnosticsPanel";
+import MonitoringPanel from "./MonitoringPanel";
 import SecurityCopilot from "./SecurityCopilot";
 import RiskIntelligencePanel from "./RiskIntelligencePanel";
 import type { AuditEvent, AwsConnectionInput, Finding, ScanHistory, Session, Severity } from "./types";
@@ -280,6 +281,8 @@ function Dashboard({ session, logout }: { session: Session; logout: () => void }
             </tr>)}</tbody>
           </table></div>
         </section>
+
+        <MonitoringPanel session={session} />
 
         <DiagnosticsPanel session={session} source={source} />
       </main>

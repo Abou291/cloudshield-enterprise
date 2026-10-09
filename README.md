@@ -135,3 +135,8 @@ See:
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+
+## Continuous monitoring
+
+Behaviour alerts from CloudTrail and GuardDuty (root use, no-MFA logins, tampering, IAM persistence, mass/GPU launches, exposure changes, new login addresses). See [docs/MONITORING.md](docs/MONITORING.md) for what it detects, its limits and how to run it.
