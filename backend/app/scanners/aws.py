@@ -1,5 +1,5 @@
-from collections.abc import Callable
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import boto3
