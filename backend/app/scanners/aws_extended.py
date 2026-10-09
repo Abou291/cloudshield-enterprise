@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 from botocore.client import BaseClient
@@ -5,6 +6,32 @@ from botocore.exceptions import ClientError
 
 from app.core.domain import Asset
 from app.services.context import tags_to_dict
+
+
+def policy_grants_full_admin(document: object) -> bool:
+    """True when an unconditional Allow statement grants Action * on Resource *."""
+    if isinstance(document, str):
+        try:
+            document = json.loads(document)
+        except ValueError:
+            return False
+    if not isinstance(document, dict):
+        return False
+    statements = document.get("Statement", [])
+    if isinstance(statements, dict):
+        statements = [statements]
+
+    def includes_wildcard(value: object) -> bool:
+        return value == "*" or (isinstance(value, list) and "*" in value)
+
+    return any(
+        isinstance(statement, dict)
+        and statement.get("Effect") == "Allow"
+        and not statement.get("Condition")
+        and includes_wildcard(statement.get("Action"))
+        and includes_wildcard(statement.get("Resource"))
+        for statement in statements
+    )
 
 
 class AwsExtendedCollectorsMixin:
@@ -80,6 +107,10 @@ class AwsExtendedCollectorsMixin:
                                 "state": instance.get("State", {}).get(
                                     "Name", "unknown"
                                 ),
+                                "instance_profile_arn": instance.get(
+                                    "IamInstanceProfile", {}
+                                ).get("Arn"),
+                                "admin_instance_profile": False,
                             },
                             context={
                                 "internet_exposed": public,
@@ -242,3 +273,103 @@ class AwsExtendedCollectorsMixin:
         if not isinstance(descriptions, list) or not descriptions:
             return {}
         return tags_to_dict(descriptions[0].get("Tags"))
+
+    def _collect_iam_policies(self) -> list[Asset]:
+        """Attached customer-managed policies, flagging those that grant Action * on Resource *."""
+        iam = self.client("iam")
+        assets: list[Asset] = []
+        paginator = iam.get_paginator("list_policies")
+        for page in paginator.paginate(Scope="Local", OnlyAttached=True):
+            for policy in page.get("Policies", []):
+                version = iam.get_policy_version(
+                    PolicyArn=policy["Arn"], VersionId=policy["DefaultVersionId"]
+                ).get("PolicyVersion", {})
+                full_admin = policy_grants_full_admin(version.get("Document"))
+                assets.append(
+                    Asset(
+                        resource_id=policy["Arn"],
+                        resource_type="iam_policy",
+                        account_id=self.account_id,
+                        region="global",
+                        name=policy.get("PolicyName", policy["Arn"]),
+                        attributes={
+                            "full_admin": full_admin,
+                            "attachment_count": int(policy.get("AttachmentCount", 0)),
+                        },
+                        context={"privileged": full_admin},
+                    )
+                )
+        return assets
+
+    def _collect_instance_profiles(self) -> list[Asset]:
+        iam = self.client("iam")
+        assets: list[Asset] = []
+        for page in iam.get_paginator("list_instance_profiles").paginate():
+            for profile in page.get("InstanceProfiles", []):
+                assets.append(
+                    Asset(
+                        resource_id=profile["Arn"],
+                        resource_type="iam_instance_profile",
+                        account_id=self.account_id,
+                        region="global",
+                        name=profile.get("InstanceProfileName", profile["Arn"]),
+                        attributes={
+                            "role_names": [
+                                role["RoleName"] for role in profile.get("Roles", [])
+                            ]
+                        },
+                    )
+                )
+        return assets
+
+    @staticmethod
+    def _link_instance_privileges(assets: list[Asset]) -> None:
+        """Mark EC2 instances whose instance profile carries a role with AdministratorAccess."""
+        admin_roles = {
+            asset.name
+            for asset in assets
+            if asset.resource_type == "iam_role"
+            and asset.attributes.get("administrator_access")
+        }
+        admin_profiles = {
+            asset.resource_id
+            for asset in assets
+            if asset.resource_type == "iam_instance_profile"
+            and admin_roles & set(asset.attributes.get("role_names", []))
+        }
+        for asset in assets:
+            if (
+                asset.resource_type == "ec2_instance"
+                and asset.attributes.get("instance_profile_arn") in admin_profiles
+            ):
+                asset.attributes["admin_instance_profile"] = True
+                asset.context["privileged"] = True
+
+    def _collect_acm_certificates(self) -> list[Asset]:
+        acm = self.client("acm")
+        assets: list[Asset] = []
+        now = datetime.now(UTC)
+        for page in acm.get_paginator("list_certificates").paginate():
+            for summary in page.get("CertificateSummaryList", []):
+                arn = summary["CertificateArn"]
+                detail = acm.describe_certificate(CertificateArn=arn).get("Certificate", {})
+                expires = detail.get("NotAfter")
+                if not isinstance(expires, datetime):
+                    continue
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=UTC)
+                assets.append(
+                    Asset(
+                        resource_id=arn,
+                        resource_type="acm_certificate",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=detail.get("DomainName", arn),
+                        attributes={
+                            "days_to_expiry": (expires - now).days,
+                            "in_use": bool(detail.get("InUseBy")),
+                            "imported": detail.get("Type") == "IMPORTED",
+                        },
+                    )
+                )
+        return assets

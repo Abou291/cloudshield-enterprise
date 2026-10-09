@@ -224,6 +224,22 @@ def test_s3_bucket_pagination_and_region_normalization():
             expected_params={"Bucket": "sample-bucket"},
         )
         stub.add_response(
+            "get_bucket_acl",
+            {
+                "Owner": {"ID": "owner"},
+                "Grants": [
+                    {
+                        "Grantee": {
+                            "Type": "Group",
+                            "URI": "http://acs.amazonaws.com/groups/global/AllUsers",
+                        },
+                        "Permission": "READ",
+                    }
+                ],
+            },
+            {"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
             "get_bucket_tagging",
             {"TagSet": [{"Key": "Environment", "Value": "prod"}]},
             {"Bucket": "sample-bucket"},
@@ -239,6 +255,7 @@ def test_s3_bucket_pagination_and_region_normalization():
         "versioning_enabled": True,
         "block_public_access": True,
         "enforces_tls": False,
+        "acl_public": True,
     }
     assert assets[0].context["tags"] == {"Environment": "prod"}
 
@@ -519,6 +536,8 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
     provider._collect_iam_password_policy = Mock(return_value=[])
     provider._collect_iam_roles = Mock(return_value=[])
     provider._collect_s3 = Mock(return_value=[])
+    provider._collect_iam_policies = Mock(return_value=[])
+    provider._collect_instance_profiles = Mock(return_value=[])
     regional_names = [
         "_collect_security_groups",
         "_collect_ec2_instances",
@@ -537,6 +556,7 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
         "_collect_secrets_manager",
         "_collect_eks",
         "_collect_load_balancers",
+        "_collect_acm_certificates",
     ]
     for name in regional_names:
         setattr(provider, name, Mock(return_value=[]))

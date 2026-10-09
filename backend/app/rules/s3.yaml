@@ -69,3 +69,14 @@ rules:
       - path: enforces_tls
         operator: is_false
     remediation: Add a bucket policy statement that denies all s3:* actions when aws:SecureTransport is false.
+
+  - id: S3-007
+    name: S3 bucket ACL grants access to everyone
+    description: The bucket ACL grants permissions to AllUsers or AuthenticatedUsers (any AWS account).
+    resource_type: s3_bucket
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: acl_public
+        operator: is_true
+    remediation: Remove the public ACL grants, enable Block Public Access and disable ACLs with BucketOwnerEnforced.

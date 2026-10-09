@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock
 
+from app.core.domain import Asset
 from app.scanners.aws import AwsInventoryProvider
 from app.services.rules import RuleEngine
 from app.services.scans import APP_ROOT
@@ -188,3 +189,159 @@ def test_internet_load_balancer_without_tls_is_flagged() -> None:
 
     assert assets[0].attributes["tls_listener"] is False
     assert {finding.rule_id for finding in findings} == {"LB-001"}
+
+
+def test_policy_grants_full_admin_detection() -> None:
+    from app.scanners.aws_extended import policy_grants_full_admin
+
+    admin = {"Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}]}
+    listed = {"Statement": {"Effect": "Allow", "Action": ["s3:Get*", "*"], "Resource": ["*"]}}
+    scoped = {"Statement": [{"Effect": "Allow", "Action": "s3:*", "Resource": "*"}]}
+    conditional = {
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": "*",
+                "Resource": "*",
+                "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}},
+            }
+        ]
+    }
+    denied = {"Statement": [{"Effect": "Deny", "Action": "*", "Resource": "*"}]}
+    assert policy_grants_full_admin(admin) is True
+    assert policy_grants_full_admin(listed) is True
+    as_text = '{"Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}'
+    assert policy_grants_full_admin(as_text) is True
+    assert policy_grants_full_admin(scoped) is False
+    assert policy_grants_full_admin(conditional) is False
+    assert policy_grants_full_admin(denied) is False
+    assert policy_grants_full_admin("not json") is False
+    assert policy_grants_full_admin(None) is False
+
+
+def test_wildcard_customer_policy_is_flagged_high() -> None:
+    provider, client = provider_with_mock_client()
+    policies = Mock()
+    policies.paginate.return_value = [
+        {
+            "Policies": [
+                {
+                    "Arn": "arn:aws:iam::111111111111:policy/oops",
+                    "PolicyName": "oops",
+                    "DefaultVersionId": "v1",
+                    "AttachmentCount": 2,
+                }
+            ]
+        }
+    ]
+    client.get_paginator.return_value = policies
+    client.get_policy_version.return_value = {
+        "PolicyVersion": {
+            "Document": {"Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}]}
+        }
+    }
+    assets = provider._collect_iam_policies()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+    assert {finding.rule_id for finding in findings} == {"IAM-010"}
+    policies.paginate.assert_called_once_with(Scope="Local", OnlyAttached=True)
+
+
+def _asset(resource_type: str, name: str, resource_id: str, **attributes) -> Asset:
+    return Asset(
+        resource_id=resource_id,
+        resource_type=resource_type,
+        name=name,
+        attributes=attributes,
+    )
+
+
+def test_instance_with_admin_role_via_profile_is_linked_and_flagged() -> None:
+    admin_role = _asset("iam_role", "admin-role", "arn:role", administrator_access=True)
+    profile = _asset(
+        "iam_instance_profile", "web", "arn:profile/web", role_names=["admin-role"]
+    )
+    exposed = _asset(
+        "ec2_instance",
+        "i-1",
+        "i-1",
+        instance_profile_arn="arn:profile/web",
+        admin_instance_profile=False,
+        public_ip_assigned=True,
+        imdsv2_required=True,
+        metadata_endpoint_enabled=True,
+    )
+    private = _asset(
+        "ec2_instance",
+        "i-2",
+        "i-2",
+        instance_profile_arn="arn:profile/web",
+        admin_instance_profile=False,
+        public_ip_assigned=False,
+    )
+    unrelated = _asset(
+        "ec2_instance",
+        "i-3",
+        "i-3",
+        instance_profile_arn=None,
+        admin_instance_profile=False,
+        public_ip_assigned=True,
+    )
+    assets = [admin_role, profile, exposed, private, unrelated]
+    AwsInventoryProvider._link_instance_privileges(assets)
+
+    assert exposed.context["privileged"] is True
+    assert private.attributes["admin_instance_profile"] is True
+    assert unrelated.attributes["admin_instance_profile"] is False
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+    flagged = {(f.rule_id, f.resource_id) for f in findings}
+    assert ("EC2-003", "i-1") in flagged
+    assert ("EC2-003", "i-2") not in flagged
+    assert ("EC2-003", "i-3") not in flagged
+
+
+def test_certificate_close_to_expiry_is_flagged() -> None:
+    provider, client = provider_with_mock_client()
+    certificates = Mock()
+    certificates.paginate.return_value = [
+        {
+            "CertificateSummaryList": [
+                {"CertificateArn": "arn:soon"},
+                {"CertificateArn": "arn:later"},
+            ]
+        }
+    ]
+    client.get_paginator.return_value = certificates
+    now = datetime.now(UTC)
+    details = {
+        "arn:soon": {"DomainName": "a.example", "NotAfter": now + timedelta(days=10)},
+        "arn:later": {"DomainName": "b.example", "NotAfter": now + timedelta(days=200)},
+    }
+    client.describe_certificate.side_effect = lambda CertificateArn: {
+        "Certificate": details[CertificateArn]
+    }
+    assets = provider._collect_acm_certificates()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+    assert [(f.rule_id, f.resource_id) for f in findings] == [("ACM-001", "arn:soon")]
+
+
+def test_bucket_acl_public_detection_and_new_iam_rules() -> None:
+    provider, client = provider_with_mock_client()
+    client.get_bucket_acl.return_value = {
+        "Grants": [
+            {"Grantee": {"URI": "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"}},
+        ]
+    }
+    assert provider._bucket_acl_public(client, "b") is True
+    client.get_bucket_acl.return_value = {"Grants": [{"Grantee": {"ID": "owner"}}]}
+    assert provider._bucket_acl_public(client, "b") is False
+
+    user = _asset(
+        "iam_user",
+        "dev",
+        "arn:user/dev",
+        mfa_enabled=True,
+        console_access=True,
+        active_access_keys=1,
+    )
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate([user])
+    assert {f.rule_id for f in findings} == {"IAM-008"}

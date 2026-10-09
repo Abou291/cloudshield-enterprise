@@ -39,3 +39,30 @@ rules:
         value: 90
     remediation: Disable and rotate the key, then migrate the workload to short-lived role credentials.
 
+
+  - id: IAM-008
+    name: IAM user has both console access and active access keys
+    description: A user that can sign in to the console also holds active long-lived access keys, doubling the credentials that can be stolen.
+    resource_type: iam_user
+    severity: low
+    confidence: 0.85
+    context_factors: [privileged]
+    conditions:
+      - path: console_access
+        operator: is_true
+      - path: active_access_keys
+        operator: at_least
+        value: 1
+    remediation: Keep console access for people and use roles or short-lived credentials for programmatic access; delete unused keys.
+
+  - id: IAM-010
+    name: Customer-managed policy grants full administrative access
+    description: An attached customer-managed IAM policy allows every action on every resource without a condition.
+    resource_type: iam_policy
+    severity: high
+    confidence: 0.97
+    context_factors: [privileged]
+    conditions:
+      - path: full_admin
+        operator: is_true
+    remediation: Replace the wildcard policy with a least-privilege policy scoped to the actions and resources the workload needs.

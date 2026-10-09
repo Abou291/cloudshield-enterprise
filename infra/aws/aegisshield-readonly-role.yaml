@@ -47,6 +47,9 @@ Resources:
                   - iam:ListAttachedUserPolicies
                   - iam:ListRoles
                   - iam:ListAttachedRolePolicies
+                  - iam:ListPolicies
+                  - iam:GetPolicyVersion
+                  - iam:ListInstanceProfiles
                 Resource: "*"
               - Sid: StorageInventory
                 Effect: Allow
@@ -59,6 +62,7 @@ Resources:
                   - s3:GetBucketPublicAccessBlock
                   - s3:GetBucketVersioning
                   - s3:GetBucketPolicy
+                  - s3:GetBucketAcl
                   - s3:GetBucketTagging
                 Resource: "*"
               - Sid: NetworkInventory
@@ -104,6 +108,8 @@ Resources:
                   - kms:GetKeyRotationStatus
                   - lambda:ListFunctions
                   - lambda:ListFunctionUrlConfigs
+                  - acm:ListCertificates
+                  - acm:DescribeCertificate
                 Resource: "*"
 
 Outputs:

@@ -69,6 +69,12 @@ def _matches(condition: RuleCondition, attributes: dict[str, Any]) -> bool:
             return actual != expected
         case "contains":
             return isinstance(actual, (str, list, tuple, set)) and expected in actual
+        case "at_least":
+            return (
+                isinstance(actual, (int, float))
+                and not isinstance(actual, bool)
+                and actual >= expected
+            )
         case "at_most":
             return (
                 isinstance(actual, (int, float))
