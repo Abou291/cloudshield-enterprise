@@ -8,6 +8,12 @@ Parameters:
   GitHubRepository:
     Type: String
     Default: Abou291/cloudshield-enterprise
+  GitHubRepositoryWithIds:
+    Type: String
+    Default: Abou291@237726130/cloudshield-enterprise@1378382374
+    Description: >
+      Repository in the ID-qualified form GitHub now puts in the OIDC "sub" claim
+      (owner@ownerId/repo@repoId). The workflow prints the exact value in its "GitHub token claims" notice.
   CreateOidcProvider:
     Type: String
     AllowedValues: ["true", "false"]
@@ -41,7 +47,9 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:*
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepositoryWithIds}:*
+                  - !Sub repo:${GitHubRepository}:*
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/ReadOnlyAccess
       Policies:
