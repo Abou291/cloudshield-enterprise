@@ -1,4 +1,4 @@
-import type { AssistantResponse, AttackPath, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, ExecutiveSummary, Finding, FindingStatus, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
+import type { AssistantResponse, AttackPath, AuditEvent, AwsConnectionInput, AwsConnectionView, AwsDiagnostics, BackupInfo, Diagnostics, ExecutiveSummary, Finding, FindingStatus, MonitorAlert, MonitorStatus, ScanHistory, ScanResult, SecurityReport, Session } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 // Intentionally memory-only: reload/logout forgets the token.
@@ -72,3 +72,10 @@ export const getExecutiveSummary = (source: string) =>
 
 export const getAttackPaths = (source: string) =>
   request<AttackPath[]>(`/attack-paths?source=${encodeURIComponent(source)}`);
+
+export const getMonitorStatus = () => request<MonitorStatus>("/monitoring/status");
+export const listMonitorAlerts = () => request<MonitorAlert[]>("/monitoring/alerts?status=open");
+export const acknowledgeAlert = (alertId: string) => request<{ status: string }>(
+  `/monitoring/alerts/${encodeURIComponent(alertId)}/ack`, { method: "POST" },
+);
+export const runMonitorCycle = () => request<{ status: string; alerts_new: number }>("/monitoring/run", { method: "POST" });

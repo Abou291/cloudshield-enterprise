@@ -26,6 +26,21 @@ services:
       db:
         condition: service_healthy
 
+  monitor:
+    # Continuous monitoring worker. Needs a configured AWS connection (see docs/MONITORING.md);
+    # without one it idles and logs nothing to do.
+    build: ./backend
+    command: ["python", "-m", "app.monitoring.worker"]
+    environment:
+      CLOUDSHIELD_ENV: development
+      CLOUDSHIELD_DEMO_MODE: "true"
+      CLOUDSHIELD_DATABASE_URL: postgresql+psycopg://cloudshield:local-only-password@db:5432/cloudshield
+      CLOUDSHIELD_MONITOR_INTERVAL_SECONDS: "900"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["monitoring"]
+
   frontend:
     build: ./frontend
     ports:
