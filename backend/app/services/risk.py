@@ -51,16 +51,20 @@ class RiskEngine:
             "confidence": round(confidence, 2),
         }
 
+        # Provenance of derived context (tag, resource type...) is shown next to the
+        # points so the score can be audited; declared values carry no suffix.
+        sources = asset.context.get("context_sources") or {}
         contextual = (
-            ("Internet exposure", exposure, self.weights.exposure),
-            ("Production asset", production, self.weights.production),
-            ("Sensitive data", sensitive_data, self.weights.sensitive_data),
-            ("Administrative privilege", privileged, self.weights.privileged),
+            ("Internet exposure", exposure, self.weights.exposure, "internet_exposure"),
+            ("Production asset", production, self.weights.production, "production_asset"),
+            ("Sensitive data", sensitive_data, self.weights.sensitive_data, "sensitive_data"),
+            ("Administrative privilege", privileged, self.weights.privileged, "privileged"),
         )
-        for label, enabled, points in contextual:
+        for label, enabled, points, source_key in contextual:
             if enabled:
                 score += points
-                reasons.append(f"{label} +{points}")
+                origin = sources.get(source_key)
+                reasons.append(f"{label} +{points}" + (f" ({origin})" if origin else ""))
 
         confidence_points = round(self.weights.high_confidence * max(0.0, min(1.0, confidence)))
         score += confidence_points

@@ -26,3 +26,119 @@ rules:
       - path: source_cidr
         operator: cidr_world
     remediation: Remove public RDP access and use a private access path with strong authentication.
+
+  - id: NET-003
+    name: MySQL/MariaDB exposed to the Internet
+    description: A security-group ingress rule allows the MySQL port (3306) from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: from_port
+        operator: tcp_port_in_range
+        value: 3306
+      - path: port_span
+        operator: at_most
+        value: 100
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove the public rule and reach the database from application subnets, a bastion or a VPN only.
+
+  - id: NET-004
+    name: PostgreSQL exposed to the Internet
+    description: A security-group ingress rule allows the PostgreSQL port (5432) from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: from_port
+        operator: tcp_port_in_range
+        value: 5432
+      - path: port_span
+        operator: at_most
+        value: 100
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove the public rule and reach the database from application subnets, a bastion or a VPN only.
+
+  - id: NET-005
+    name: SQL Server exposed to the Internet
+    description: A security-group ingress rule allows the SQL Server port (1433) from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: from_port
+        operator: tcp_port_in_range
+        value: 1433
+      - path: port_span
+        operator: at_most
+        value: 100
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove the public rule and reach the database from application subnets, a bastion or a VPN only.
+
+  - id: NET-006
+    name: MongoDB exposed to the Internet
+    description: A security-group ingress rule allows the MongoDB port (27017) from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: from_port
+        operator: tcp_port_in_range
+        value: 27017
+      - path: port_span
+        operator: at_most
+        value: 100
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove the public rule, require authentication and TLS, and expose the database only on private subnets.
+
+  - id: NET-007
+    name: Redis exposed to the Internet
+    description: A security-group ingress rule allows the Redis port (6379) from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.97
+    conditions:
+      - path: from_port
+        operator: tcp_port_in_range
+        value: 6379
+      - path: port_span
+        operator: at_most
+        value: 100
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove the public rule, require AUTH/ACLs and TLS, and keep the cache on private subnets.
+
+  - id: NET-008
+    name: Elasticsearch/OpenSearch exposed to the Internet
+    description: A security-group ingress rule allows the Elasticsearch port (9200) from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: high
+    confidence: 0.95
+    conditions:
+      - path: from_port
+        operator: tcp_port_in_range
+        value: 9200
+      - path: port_span
+        operator: at_most
+        value: 100
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Remove the public rule and put the cluster behind private networking with authentication.
+
+  - id: NET-009
+    name: All traffic allowed from the Internet
+    description: A security-group ingress rule allows every protocol and port from every IPv4 or IPv6 address.
+    resource_type: security_group_rule
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: protocol
+        operator: equals
+        value: "-1"
+      - path: source_cidr
+        operator: cidr_world
+    remediation: Replace the all-traffic rule with explicit, minimal ingress rules scoped to known source ranges.

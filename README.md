@@ -1,5 +1,7 @@
 # AegisShield
 
+> Naming: **AegisShield** is the product. The repository and some early documents still use its former working name, *CloudShield Enterprise*; both refer to the same project.
+
 AegisShield is an AWS Cloud Security Posture Management desktop pilot. It discovers a focused set of IAM, S3 and EC2 security-group configuration, evaluates declarative security rules, computes explainable contextual risk, persists findings locally and presents them in a React/Electron security console.
 
 ## Windows desktop pilot
@@ -31,6 +33,9 @@ See [docs/DESKTOP_PILOT.md](docs/DESKTOP_PILOT.md) for the Windows/AWS onboardin
 - Desktop diagnostics, AWS validation, SQLite backup/restore and machine-readable security-report export with integrity checksum.
 - Certificate-gated tagged release workflow: public Windows releases fail closed unless an Authenticode signing certificate is configured.
 - Least-privilege AWS CloudFormation role template for pilot onboarding.
+- Risk context derived from real signals: production from `Environment` tags and sensitive data from `DataClassification`/PII tags or resource type, with the source shown in each score explanation (see [docs/risk-engine.md](docs/risk-engine.md)).
+- Indicative mapping of automated checks to CIS AWS Foundations v3.0 and AWS Foundational Security Best Practices controls (`GET /api/v1/compliance`, also embedded in the security report).
+- Offline CLI (`python -m app.cli`) and a deliberately misconfigured validation stack to prove detections end to end on a real AWS account: [docs/VALIDATION_LAB.md](docs/VALIDATION_LAB.md).
 
 ## Windows + AWS pilot flow
 

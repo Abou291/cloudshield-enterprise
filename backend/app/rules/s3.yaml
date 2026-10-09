@@ -54,3 +54,14 @@ rules:
       - path: versioning_enabled
         operator: is_false
     remediation: Enable S3 Versioning where recovery requirements justify the additional storage lifecycle impact.
+
+  - id: S3-006
+    name: S3 bucket does not enforce TLS
+    description: The bucket policy has no Deny statement on aws:SecureTransport=false, so plaintext HTTP requests are accepted.
+    resource_type: s3_bucket
+    severity: medium
+    confidence: 0.90
+    conditions:
+      - path: enforces_tls
+        operator: is_false
+    remediation: Add a bucket policy statement that denies all s3:* actions when aws:SecureTransport is false.

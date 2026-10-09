@@ -1,0 +1,52 @@
+# Indicative mapping from AegisShield rules to published control identifiers.
+# A mapped control means "AegisShield has an automated check relevant to it", not that the
+# check fully satisfies the control. Verify against the current benchmark text before
+# using the output as audit evidence.
+frameworks:
+  - id: cis-aws-3.0
+    name: CIS AWS Foundations Benchmark v3.0.0
+    controls:
+      - {id: "1.4", title: "No root user access key exists", rules: [IAM-005]}
+      - {id: "1.5", title: "MFA is enabled for the root user", rules: [IAM-004]}
+      - {id: "1.8", title: "IAM password policy requires a strong minimum length", rules: [IAM-006]}
+      - {id: "1.10", title: "MFA is enabled for all IAM users with a console password", rules: [IAM-001]}
+      - {id: "1.14", title: "Access keys are rotated every 90 days or less", rules: [IAM-003]}
+      - {id: "1.16", title: "No IAM policy grants full administrative privileges", rules: [IAM-002, IAM-007]}
+      - {id: "2.1.1", title: "S3 buckets deny HTTP requests", rules: [S3-006]}
+      - {id: "2.1.4", title: "S3 Block Public Access is enabled", rules: [S3-001, S3-004]}
+      - {id: "2.2.1", title: "EBS volume encryption is enabled", rules: [EBS-001, EBS-002]}
+      - {id: "2.3.1", title: "RDS instances are encrypted at rest", rules: [RDS-002]}
+      - {id: "2.3.3", title: "RDS instances are not publicly accessible", rules: [RDS-001]}
+      - {id: "3.1", title: "CloudTrail is enabled in all Regions", rules: [CT-001, CT-002]}
+      - {id: "3.2", title: "CloudTrail log file validation is enabled", rules: [CT-003]}
+      - {id: "3.5", title: "AWS Config is enabled", rules: [CFG-001]}
+      - {id: "3.6", title: "S3 bucket access logging is enabled", rules: [S3-003]}
+      - {id: "3.8", title: "KMS customer-managed key rotation is enabled", rules: [KMS-001]}
+      - {id: "3.9", title: "VPC flow logging is enabled in all VPCs", rules: [VPC-001]}
+      - {id: "5.2", title: "No security group allows ingress from 0.0.0.0/0 to administration ports", rules: [NET-001, NET-002, NET-009]}
+      - {id: "5.3", title: "No security group allows ingress from ::/0 to administration ports", rules: [NET-001, NET-002, NET-009]}
+      - {id: "5.6", title: "EC2 instances use IMDSv2", rules: [EC2-001]}
+  - id: aws-fsbp
+    name: AWS Foundational Security Best Practices
+    controls:
+      - {id: "IAM.4", title: "IAM root user access key should not exist", rules: [IAM-005]}
+      - {id: "IAM.9", title: "MFA should be enabled for the root user", rules: [IAM-004]}
+      - {id: "IAM.3", title: "IAM users' access keys should be rotated every 90 days", rules: [IAM-003]}
+      - {id: "S3.5", title: "S3 buckets should require requests to use SSL", rules: [S3-006]}
+      - {id: "EC2.1", title: "EBS snapshots should not be publicly restorable", rules: [EBS-003]}
+      - {id: "EC2.6", title: "VPC flow logging should be enabled in all VPCs", rules: [VPC-001]}
+      - {id: "EC2.7", title: "EBS default encryption should be enabled", rules: [EBS-002]}
+      - {id: "EC2.8", title: "EC2 instances should use IMDSv2", rules: [EC2-001]}
+      - {id: "EC2.13", title: "Security groups should not allow ingress from 0.0.0.0/0 to port 22", rules: [NET-001]}
+      - {id: "EC2.19", title: "Security groups should not allow unrestricted access to high-risk ports", rules: [NET-002, NET-003, NET-004, NET-005, NET-006, NET-007, NET-008, NET-009]}
+      - {id: "RDS.2", title: "RDS instances should prohibit public access", rules: [RDS-001]}
+      - {id: "RDS.3", title: "RDS instances should have encryption at rest enabled", rules: [RDS-002]}
+      - {id: "RDS.8", title: "RDS instances should have deletion protection enabled", rules: [RDS-003]}
+      - {id: "RDS.11", title: "RDS instances should have automatic backups enabled", rules: [RDS-004]}
+      - {id: "CloudTrail.1", title: "CloudTrail should be enabled with at least one multi-Region trail", rules: [CT-001, CT-002]}
+      - {id: "CloudTrail.4", title: "CloudTrail log file validation should be enabled", rules: [CT-003]}
+      - {id: "GuardDuty.1", title: "GuardDuty should be enabled", rules: [GD-001]}
+      - {id: "Config.1", title: "AWS Config should be enabled", rules: [CFG-001]}
+      - {id: "SecurityHub.1", title: "Security Hub should be enabled", rules: [SH-001]}
+      - {id: "KMS.4", title: "KMS key rotation should be enabled", rules: [KMS-001]}
+      - {id: "EKS.1", title: "EKS cluster endpoints should not be publicly accessible", rules: [EKS-001]}

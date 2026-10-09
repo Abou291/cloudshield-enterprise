@@ -8,6 +8,9 @@ rules:
     conditions:
       - path: mfa_enabled
         operator: is_false
+      - path: console_access
+        operator: not_equals
+        value: false
     remediation: Enable MFA and prefer federated, short-lived access through IAM Identity Center.
 
   - id: IAM-002

@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
 from botocore.client import BaseClient
+from botocore.exceptions import ClientError
 
 from app.core.domain import Asset
+from app.services.context import tags_to_dict
 
 
 class AwsExtendedCollectorsMixin:
@@ -79,7 +81,10 @@ class AwsExtendedCollectorsMixin:
                                     "Name", "unknown"
                                 ),
                             },
-                            context={"internet_exposed": public},
+                            context={
+                                "internet_exposed": public,
+                                "tags": tags_to_dict(instance.get("Tags")),
+                            },
                         )
                     )
         return assets
@@ -138,7 +143,10 @@ class AwsExtendedCollectorsMixin:
                             "age_since_change_days": age_days,
                             "customer_kms_key": bool(secret.get("KmsKeyId")),
                         },
-                        context={"sensitive_data": True},
+                        context={
+                            "sensitive_data": True,
+                            "tags": tags_to_dict(secret.get("Tags")),
+                        },
                     )
                 )
         return assets
@@ -176,7 +184,10 @@ class AwsExtendedCollectorsMixin:
                             "audit_logging_enabled": "audit" in enabled_logs,
                             "enabled_log_types": sorted(enabled_logs),
                         },
-                        context={"internet_exposed": public_open},
+                        context={
+                            "internet_exposed": public_open,
+                            "tags": tags_to_dict(cluster.get("tags")),
+                        },
                     )
                 )
         return assets
@@ -195,6 +206,7 @@ class AwsExtendedCollectorsMixin:
                     for listener in listener_page.get("Listeners", [])
                 }
                 internet_facing = load_balancer.get("Scheme") == "internet-facing"
+                tags = self._load_balancer_tags(elbv2, arn)
                 tls_listener = bool(protocols & {"HTTPS", "TLS"})
                 assets.append(
                     Asset(
@@ -211,7 +223,22 @@ class AwsExtendedCollectorsMixin:
                             "listener_protocols": sorted(protocols),
                             "type": load_balancer.get("Type", "unknown"),
                         },
-                        context={"internet_exposed": internet_facing},
+                        context={"internet_exposed": internet_facing, "tags": tags},
                     )
                 )
         return assets
+
+    @staticmethod
+    def _load_balancer_tags(elbv2: BaseClient, arn: str) -> dict[str, str]:
+        """Tags are optional context; a missing permission must not drop the load balancer."""
+        denied = {"AccessDenied", "AccessDeniedException"}
+        try:
+            response = elbv2.describe_tags(ResourceArns=[arn])
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in denied:
+                return {}
+            raise
+        descriptions = response.get("TagDescriptions") if isinstance(response, dict) else None
+        if not isinstance(descriptions, list) or not descriptions:
+            return {}
+        return tags_to_dict(descriptions[0].get("Tags"))
