@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { acknowledgeAlert, getMonitorStatus, listMonitorAlerts, runMonitorCycle } from "./api";
 import type { MonitorAlert, MonitorStatus, Session } from "./types";
@@ -17,19 +17,19 @@ export default function MonitoringPanel({ session }: { session: Session }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      const [nextStatus, nextAlerts] = await Promise.all([getMonitorStatus(), listMonitorAlerts()]);
-      setStatus(typeof nextStatus?.status === "string" ? nextStatus : null);
-      setAlerts(Array.isArray(nextAlerts) ? nextAlerts : []);
-    } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "Monitoring unavailable");
-    }
-  }, []);
+  const refresh = () =>
+    Promise.all([getMonitorStatus(), listMonitorAlerts()])
+      .then(([nextStatus, nextAlerts]) => {
+        setStatus(typeof nextStatus?.status === "string" ? nextStatus : null);
+        setAlerts(Array.isArray(nextAlerts) ? nextAlerts : []);
+      })
+      .catch((caught) =>
+        setMessage(caught instanceof Error ? caught.message : "Monitoring unavailable"),
+      );
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, []);
 
   const run = async () => {
     setBusy(true);
