@@ -41,13 +41,21 @@ jobs:
         env:
           ROLE_ARN: ${{ vars.AWS_VALIDATION_ROLE_ARN }}
         run: |
-          test -n "$ROLE_ARN" || { echo "::error::Repository variable AWS_VALIDATION_ROLE_ARN is not set"; exit 1; }
-          TOKEN=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+          fail() { echo "::error title=OIDC login::$1"; exit 1; }
+          test -n "$ROLE_ARN" || fail "Repository variable AWS_VALIDATION_ROLE_ARN is not set"
+          echo "::notice title=Role ARN used::[$ROLE_ARN]"
+          RESPONSE=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com") || fail "Could not request the GitHub OIDC token"
+          TOKEN=$(echo "$RESPONSE" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])') \
+            || fail "GitHub did not return an OIDC token: $(echo "$RESPONSE" | head -c 300)"
           echo "::add-mask::$TOKEN"
+          # The sub claim is not secret; showing it makes trust-policy mismatches obvious.
+          CLAIM=$(echo "$TOKEN" | cut -d. -f2 | python -c 'import base64,json,sys; d=sys.stdin.read().strip(); d+="="*(-len(d)%4); c=json.loads(base64.urlsafe_b64decode(d)); print("sub="+c["sub"]+" aud="+str(c["aud"]))')
+          echo "::notice title=GitHub token claims::$CLAIM"
           CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE_ARN" \
             --role-session-name validation-lab --web-identity-token "$TOKEN" \
-            --query Credentials --output json)
+            --query Credentials --output json 2>aws-error.txt) \
+            || fail "AWS refused the role: $(tr '\n' ' ' < aws-error.txt | head -c 500)"
           for pair in "AWS_ACCESS_KEY_ID:AccessKeyId" "AWS_SECRET_ACCESS_KEY:SecretAccessKey" "AWS_SESSION_TOKEN:SessionToken"; do
             value=$(echo "$CREDS" | python -c "import json,sys; print(json.load(sys.stdin)['${pair#*:}'])")
             echo "::add-mask::$value"
