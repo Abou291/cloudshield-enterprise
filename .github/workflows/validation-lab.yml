@@ -1,0 +1,106 @@
+name: Validation lab
+
+# Manual only. Deploys a deliberately misconfigured stack in a SANDBOX AWS account, scans it with
+# the real collectors, checks that every expected rule fires, then deletes the stack.
+# Credentials come from GitHub OIDC (infra/aws/github-oidc-role.yaml): no stored access key.
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: AWS region of the sandbox account
+        default: eu-west-3
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: validation-lab
+  cancel-in-progress: false
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ inputs.region }}
+      AWS_DEFAULT_REGION: ${{ inputs.region }}
+      STACK: aegisshield-validation-lab
+      EXPECTED: S3-003,S3-004,S3-005,S3-006,NET-001,NET-004,NET-007
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e ./backend
+
+      - name: Assume the sandbox role through OIDC
+        env:
+          ROLE_ARN: ${{ vars.AWS_VALIDATION_ROLE_ARN }}
+        run: |
+          test -n "$ROLE_ARN" || { echo "::error::Repository variable AWS_VALIDATION_ROLE_ARN is not set"; exit 1; }
+          TOKEN=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+          echo "::add-mask::$TOKEN"
+          CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE_ARN" \
+            --role-session-name validation-lab --web-identity-token "$TOKEN" \
+            --query Credentials --output json)
+          for pair in "AWS_ACCESS_KEY_ID:AccessKeyId" "AWS_SECRET_ACCESS_KEY:SecretAccessKey" "AWS_SESSION_TOKEN:SessionToken"; do
+            value=$(echo "$CREDS" | python -c "import json,sys; print(json.load(sys.stdin)['${pair#*:}'])")
+            echo "::add-mask::$value"
+            echo "${pair%%:*}=$value" >> "$GITHUB_ENV"
+          done
+
+      - name: Deploy the misconfigured stack
+        run: |
+          VPC=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+          test "$VPC" != "None" || { echo "::error::No default VPC in $AWS_REGION"; exit 1; }
+          aws cloudformation create-stack --stack-name "$STACK" \
+            --template-body file://infra/aws/validation-lab.yaml \
+            --parameters ParameterKey=VpcId,ParameterValue="$VPC"
+          aws cloudformation wait stack-create-complete --stack-name "$STACK"
+
+      - name: Scan with the real collectors
+        run: |
+          cd backend
+          set +e
+          python -m app.cli --region "$AWS_REGION" --output ../lab-report.json --anonymize --expect "$EXPECTED" 2>&1 | tee ../scan.log
+          echo "SCAN_EXIT=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+
+      - name: Summarise (readable without downloading artifacts)
+        run: |
+          python - <<'PY'
+          import json
+          r = json.load(open("lab-report.json"))
+          rules = sorted({f["rule_id"] for f in r["findings"]})
+          lab = [f for f in r["findings"] if f["risk"]["reasons"] and any("tag Environment" in x for x in f["risk"]["reasons"])]
+          print(f"::notice title=Scan::{r['assets_scanned']} assets, {len(r['findings'])} findings, gaps={r['coverage_gaps']}")
+          print(f"::notice title=Rules fired::{','.join(rules)}")
+          print(f"::notice title=Context coverage::{r['context_coverage']}")
+          for f in lab[:3]:
+              print(f"::notice title=Tag-derived score {f['rule_id']}={f['risk']['score']}::{' | '.join(f['risk']['reasons'])}")
+          cis = next(x for x in r["compliance"]["frameworks"] if x["id"] == "cis-aws-3.0")
+          print(f"::notice title=CIS controls failing::{cis['controls_failing']} of {cis['controls_mapped']} mapped")
+          PY
+          cat scan.log
+
+      - name: Delete the stack
+        if: always()
+        run: |
+          aws cloudformation delete-stack --stack-name "$STACK" || true
+          aws cloudformation wait stack-delete-complete --stack-name "$STACK" || true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: validation-lab-report
+          path: |
+            lab-report.json
+            scan.log
+          if-no-files-found: ignore
+
+      - name: Fail if an expected detection is missing
+        run: test "${SCAN_EXIT:-1}" = "0"

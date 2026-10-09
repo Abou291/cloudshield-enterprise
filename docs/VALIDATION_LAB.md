@@ -48,3 +48,11 @@ aws cloudformation delete-stack --stack-name aegisshield-validation-lab
 ## What this does and does not prove
 
 It proves that the collectors, the context derivation and the rules work against real AWS APIs for these resources. It does not measure false-positive rates on a production estate or coverage of services outside the AWS coverage matrix; repeat the scan on at least one real, tagged environment and record the result in `docs/validation-results.md`.
+
+## Running it from GitHub Actions (no key stored anywhere)
+
+1. In the sandbox account, deploy `infra/aws/github-oidc-role.yaml` (CloudFormation console, or `aws cloudformation deploy --capabilities CAPABILITY_NAMED_IAM`). Set `CreateOidcProvider=false` if the GitHub OIDC provider already exists.
+2. Copy the `RoleArn` output into a repository **variable** (not a secret) named `AWS_VALIDATION_ROLE_ARN` (Settings, Secrets and variables, Actions, Variables).
+3. Run the **Validation lab** workflow from the Actions tab and pick the region.
+
+The workflow assumes the role through OIDC, deploys the lab stack, scans it with the real collectors, checks the expected rules, publishes a short summary as annotations plus an anonymized report artifact, and always deletes the stack.
