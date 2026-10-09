@@ -42,6 +42,7 @@ Resources:
                   - iam:GetAccountPasswordPolicy
                   - iam:ListUsers
                   - iam:ListMFADevices
+                  - iam:GetLoginProfile
                   - iam:ListAccessKeys
                   - iam:ListAttachedUserPolicies
                   - iam:ListRoles
@@ -57,6 +58,8 @@ Resources:
                   - s3:GetBucketLocation
                   - s3:GetBucketPublicAccessBlock
                   - s3:GetBucketVersioning
+                  - s3:GetBucketPolicy
+                  - s3:GetBucketTagging
                 Resource: "*"
               - Sid: NetworkInventory
                 Effect: Allow
@@ -68,6 +71,7 @@ Resources:
                   - ec2:DescribeFlowLogs
                   - ec2:DescribeRegions
                   - ec2:DescribeInstances
+                  - ec2:DescribeSnapshots
                 Resource: "*"
               - Sid: DatabaseInventory
                 Effect: Allow
@@ -83,6 +87,7 @@ Resources:
                   - eks:DescribeCluster
                   - elasticloadbalancing:DescribeLoadBalancers
                   - elasticloadbalancing:DescribeListeners
+                  - elasticloadbalancing:DescribeTags
                 Resource: "*"
               - Sid: AuditAndDetectionInventory
                 Effect: Allow

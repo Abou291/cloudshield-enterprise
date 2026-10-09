@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import json
 from datetime import UTC, datetime
 
 import boto3
@@ -8,6 +9,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.domain import Asset
 from app.scanners.aws_extended import AwsExtendedCollectorsMixin
+from app.services.context import tags_to_dict
 
 
 class AwsInventoryProvider(AwsExtendedCollectorsMixin):
@@ -68,6 +70,7 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
             ("ec2-security-groups", self._collect_security_groups),
             ("ec2-instances", self._collect_ec2_instances),
             ("ebs", self._collect_ebs),
+            ("ebs-snapshots", self._collect_public_snapshots),
             ("ebs-default-encryption", self._collect_ebs_default_encryption),
             ("vpc-flow-logs", self._collect_vpc_flow_logs),
             ("rds", self._collect_rds),
@@ -207,11 +210,22 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                         "mfa_enabled": mfa_enabled,
                         "oldest_access_key_days": oldest_key_days,
                         "administrator_access": administrator,
+                        "console_access": self._user_has_console_access(iam, username),
                     },
                     context={"privileged": administrator},
                 )
             )
         return assets
+
+    @staticmethod
+    def _user_has_console_access(iam: BaseClient, username: str) -> bool:
+        try:
+            iam.get_login_profile(UserName=username)
+            return True
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "NoSuchEntity":
+                return False
+            raise
 
     def _collect_iam_password_policy(self) -> list[Asset]:
         iam = self.client("iam")
@@ -270,8 +284,12 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                         "block_public_access": self._bucket_public_access_block(
                             s3, name
                         ),
+                        "enforces_tls": self._bucket_enforces_tls(s3, name),
                     },
-                    context={"internet_exposed": public},
+                    context={
+                        "internet_exposed": public,
+                        "tags": self._bucket_tags(s3, name),
+                    },
                 )
             )
         return assets
@@ -309,6 +327,12 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                                     "to_port": to_port,
                                     "protocol": protocol,
                                     "source_cidr": cidr,
+                                    "port_span": (
+                                        to_port - from_port
+                                        if isinstance(from_port, int)
+                                        and isinstance(to_port, int)
+                                        else None
+                                    ),
                                 },
                                 context={
                                     "internet_exposed": cidr
@@ -334,6 +358,7 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                             "encrypted": bool(volume.get("Encrypted", False)),
                             "state": volume.get("State", "unknown"),
                         },
+                        context={"tags": tags_to_dict(volume.get("Tags"))},
                     )
                 )
         return assets
@@ -413,7 +438,10 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                                 database.get("BackupRetentionPeriod", 0)
                             ),
                         },
-                        context={"internet_exposed": public},
+                        context={
+                            "internet_exposed": public,
+                            "tags": tags_to_dict(database.get("TagList")),
+                        },
                     )
                 )
         return assets
@@ -636,6 +664,71 @@ class AwsInventoryProvider(AwsExtendedCollectorsMixin):
                             )
                         )
         return assets
+
+    def _collect_public_snapshots(self) -> list[Asset]:
+        """EBS snapshots owned by this account that any AWS account can restore."""
+        ec2 = self.client("ec2")
+        assets: list[Asset] = []
+        paginator = ec2.get_paginator("describe_snapshots")
+        for page in paginator.paginate(OwnerIds=["self"], RestorableByUserIds=["all"]):
+            for snapshot in page.get("Snapshots", []):
+                assets.append(
+                    Asset(
+                        resource_id=snapshot["SnapshotId"],
+                        resource_type="ebs_snapshot",
+                        account_id=self.account_id,
+                        region=self.region,
+                        name=snapshot["SnapshotId"],
+                        attributes={
+                            "public": True,
+                            "encrypted": bool(snapshot.get("Encrypted", False)),
+                        },
+                        context={
+                            "internet_exposed": True,
+                            "tags": tags_to_dict(snapshot.get("Tags")),
+                        },
+                    )
+                )
+        return assets
+
+    @staticmethod
+    def _bucket_tags(s3: BaseClient, name: str) -> dict[str, str]:
+        """Tags are optional context: an absent tag set or a missing permission is not an error."""
+        try:
+            return tags_to_dict(s3.get_bucket_tagging(Bucket=name).get("TagSet"))
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {
+                "NoSuchTagSet",
+                "NoSuchTagSetError",
+                "AccessDenied",
+            }:
+                return {}
+            raise
+
+    @staticmethod
+    def _bucket_enforces_tls(s3: BaseClient, name: str) -> bool:
+        """True when the bucket policy denies requests made without TLS (aws:SecureTransport)."""
+        try:
+            raw = s3.get_bucket_policy(Bucket=name).get("Policy")
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "NoSuchBucketPolicy":
+                return False
+            raise
+        try:
+            document = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except ValueError:
+            return False
+        statements = document.get("Statement", [])
+        if isinstance(statements, dict):
+            statements = [statements]
+        for statement in statements:
+            if statement.get("Effect") != "Deny":
+                continue
+            condition = statement.get("Condition", {}).get("Bool", {})
+            for key, value in condition.items():
+                if key.lower() == "aws:securetransport" and str(value).lower() == "false":
+                    return True
+        return False
 
     @staticmethod
     def _bucket_public(s3: BaseClient, name: str) -> bool:

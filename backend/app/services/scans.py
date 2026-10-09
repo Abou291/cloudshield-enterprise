@@ -11,6 +11,7 @@ from app.core.auth import Principal
 from app.core.domain import ScanResult
 from app.db.models import AuditRecord, ScanLock, ScanRecord
 from app.scanners.base import InventoryProvider
+from app.services.context import enrich_context
 from app.services.findings import FindingRepository
 from app.services.rules import RuleEngine
 
@@ -70,6 +71,7 @@ class ScanService:
         self.db.commit()
         try:
             assets = self.provider_factory().collect()
+            enrich_context(assets)
             findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
             for finding in findings:
                 finding.source = self.source

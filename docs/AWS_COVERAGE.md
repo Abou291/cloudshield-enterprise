@@ -12,6 +12,7 @@ AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what th
 | IAM user key age | IAM ListAccessKeys | Active key older than 90 days |
 | Direct AdministratorAccess | IAM attached user policies | Direct administrator policy |
 | Account password policy | IAM GetAccountPasswordPolicy | Password policy missing |
+| Console access of users | IAM GetLoginProfile | MFA finding only for users that can sign in to the console |
 | IAM role privilege | IAM ListRoles + attached role policies | Direct AdministratorAccess on a non-service-linked role |
 
 ## Storage and data
@@ -23,6 +24,8 @@ AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what th
 | S3 default encryption | S3 encryption configuration | Explicit default encryption absent |
 | S3 versioning | S3 versioning configuration | Versioning disabled |
 | S3 server access logging | S3 logging configuration | Logging disabled |
+| S3 transport encryption | S3 bucket policy | No Deny on `aws:SecureTransport=false` |
+| EBS snapshot sharing | EC2 DescribeSnapshots (restorable by `all`) | Publicly restorable snapshot |
 | EBS volume encryption | EC2 DescribeVolumes | Unencrypted volume |
 | EBS encryption by default | EC2 account setting | Default encryption disabled |
 | EC2 metadata service | EC2 DescribeInstances | IMDSv2 session tokens not required |
@@ -38,6 +41,8 @@ AegisShield 0.6.0 is a read-only AWS CSPM pilot. This document describes what th
 | Control | Evidence source | Finding |
 | --- | --- | --- |
 | World-open SSH/RDP | EC2 security-group ingress | Internet-exposed administrative port |
+| World-open database ports | EC2 security-group ingress | MySQL, PostgreSQL, SQL Server, MongoDB, Redis, Elasticsearch open to the world (rules on a port span of 100 or less, so a single wide range does not fan out into every rule) |
+| World-open all traffic | EC2 security-group ingress | Protocol `-1` from 0.0.0.0/0 or ::/0 |
 | VPC Flow Logs | EC2 DescribeFlowLogs | VPC without active flow log |
 | CloudTrail logging | CloudTrail status | Logging disabled |
 | CloudTrail multi-Region | CloudTrail trail metadata | Trail not multi-Region |

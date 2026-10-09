@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  DELIBERATELY MISCONFIGURED validation lab for AegisShield. Deploy only in a disposable,
+  empty AWS account or sandbox. Nothing here attaches to a running workload: the security
+  group is unattached and the bucket is empty and not publicly readable.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC (the default VPC is fine) in which to create the unattached security group.
+
+Resources:
+  LabBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      # BlockPublicAcls is deliberately off: S3-004 (partial Block Public Access).
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      # No logging, no versioning, no TLS-deny policy: S3-003, S3-005, S3-006.
+      Tags:
+        - {Key: Environment, Value: prod}
+        - {Key: DataClassification, Value: confidential}
+
+  LabSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: AegisShield validation lab - intentionally open, unattached
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 6379, ToPort: 6379, CidrIp: 0.0.0.0/0}
+      Tags:
+        - {Key: Environment, Value: prod}
+
+Outputs:
+  ExpectedRuleIds:
+    Description: Pass to `python -m app.cli --expect` to verify detection end to end.
+    Value: "S3-003,S3-004,S3-005,S3-006,NET-001,NET-004,NET-007"

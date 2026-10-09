@@ -57,6 +57,12 @@ def _matches(condition: RuleCondition, attributes: dict[str, Any]) -> bool:
             return actual != expected
         case "contains":
             return isinstance(actual, (str, list, tuple, set)) and expected in actual
+        case "at_most":
+            return (
+                isinstance(actual, (int, float))
+                and not isinstance(actual, bool)
+                and actual <= expected
+            )
         case "older_than_days":
             return isinstance(actual, (int, float)) and actual > expected
         case "is_false":

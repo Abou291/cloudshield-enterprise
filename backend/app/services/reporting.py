@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 from app.core.domain import Finding, FindingStatus, ScanHistory
+from app.services.compliance import build_compliance_posture
 
 
 def _candidate_id(kind: str, findings: list[Finding]) -> str:
@@ -218,6 +219,7 @@ def build_security_report(
         },
         "executive_summary": build_executive_summary(findings),
         "attack_paths": build_attack_paths(findings),
+        "compliance": build_compliance_posture(findings),
         "findings": [item.model_dump(mode="json") for item in findings],
     }
     canonical = json.dumps(

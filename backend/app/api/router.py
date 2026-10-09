@@ -24,6 +24,7 @@ from app.scanners.aws import AwsInventoryProvider
 from app.scanners.fixture import FixtureInventoryProvider
 from app.services.assistant import ask_llm
 from app.services.backup import DesktopBackupService
+from app.services.compliance import build_compliance_posture
 from app.services.desktop_connection import DesktopConnectionStore
 from app.services.diagnostics import (
     aws_diagnostics,
@@ -260,6 +261,16 @@ def attack_paths(
 ) -> list[dict]:
     findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
     return build_attack_paths(findings)
+
+
+@router.get("/compliance")
+def compliance_posture(
+    db: DatabaseSession,
+    principal: Identity,
+    source: Literal["demo-fixture", "aws"] = "aws",
+) -> dict:
+    findings = FindingRepository(db, principal.tenant_id, source).list(None, 500, 0)
+    return build_compliance_posture(findings)
 
 
 @router.get("/health")

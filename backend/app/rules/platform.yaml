@@ -200,6 +200,17 @@ rules:
         operator: is_false
     remediation: Enable GuardDuty for the account and Region, preferably through AWS Organizations for centralized coverage.
 
+  - id: EBS-003
+    name: EBS snapshot is shared publicly
+    description: The EBS snapshot can be restored by any AWS account, exposing the disk contents.
+    resource_type: ebs_snapshot
+    severity: critical
+    confidence: 0.99
+    conditions:
+      - path: public
+        operator: is_true
+    remediation: Remove the public create-volume permission and audit whether the snapshot contents were accessed or copied.
+
   - id: COV-001
     name: Scanner coverage gap
     description: AegisShield could not inspect an AWS service because the API was unavailable or the scanner role lacked permission.

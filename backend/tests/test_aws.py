@@ -33,7 +33,7 @@ def provider_with_client(service):
     [
         ("tcp", 20, 25, {"NET-001"}),
         ("6", 1, 65535, {"NET-001", "NET-002"}),
-        ("-1", None, None, {"NET-001", "NET-002"}),
+        ("-1", None, None, {"NET-001", "NET-002", "NET-009"}),
         ("udp", 22, 22, set()),
         ("tcp", 443, 443, set()),
         ("tcp", 3389, 3389, {"NET-002"}),
@@ -127,9 +127,17 @@ def test_iam_pagination_and_inactive_keys():
             },
             {"UserName": "alice", "Marker": "next-page"},
         )
+        stub.add_client_error(
+            "get_login_profile",
+            service_error_code="NoSuchEntity",
+            expected_params={"UserName": "alice"},
+        )
         assets = provider._collect_iam()
         stub.assert_no_pending_responses()
     assert assets[0].resource_type == "iam_account"
+    assert assets[1].attributes["console_access"] is False
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets[1:])
+    assert "IAM-001" not in {finding.rule_id for finding in findings}
     assert assets[0].attributes["root_mfa_enabled"] is True
     assert assets[1].attributes["administrator_access"] is True
     assert assets[1].attributes["oldest_access_key_days"] == 0
@@ -210,6 +218,16 @@ def test_s3_bucket_pagination_and_region_normalization():
             },
             {"Bucket": "sample-bucket"},
         )
+        stub.add_client_error(
+            "get_bucket_policy",
+            service_error_code="NoSuchBucketPolicy",
+            expected_params={"Bucket": "sample-bucket"},
+        )
+        stub.add_response(
+            "get_bucket_tagging",
+            {"TagSet": [{"Key": "Environment", "Value": "prod"}]},
+            {"Bucket": "sample-bucket"},
+        )
         assets = provider._collect_s3()
         stub.assert_no_pending_responses()
     assert len(assets) == 1
@@ -220,7 +238,9 @@ def test_s3_bucket_pagination_and_region_normalization():
         "logging_enabled": False,
         "versioning_enabled": True,
         "block_public_access": True,
+        "enforces_tls": False,
     }
+    assert assets[0].context["tags"] == {"Environment": "prod"}
 
 
 @pytest.mark.parametrize(
@@ -528,3 +548,136 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
     for name in regional_names:
         assert getattr(provider, name).call_count == 2
     assert provider.region == "eu-west-3"
+
+
+TLS_DENY_POLICY = (
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:*",'
+    '"Resource":"*","Condition":{"Bool":{"aws:SecureTransport":"false"}}}]}'
+)
+ALLOW_ONLY_POLICY = (
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*",'
+    '"Action":"s3:GetObject","Resource":"*"}]}'
+)
+
+
+@pytest.mark.parametrize(
+    "policy,expected",
+    [(TLS_DENY_POLICY, True), (ALLOW_ONLY_POLICY, False), ("not-json", False)],
+)
+def test_bucket_tls_enforcement_is_read_from_policy(policy, expected):
+    provider, client = provider_with_client("s3")
+    with Stubber(client) as stub:
+        stub.add_response("get_bucket_policy", {"Policy": policy}, {"Bucket": "b"})
+        assert provider._bucket_enforces_tls(client, "b") is expected
+
+
+def test_bucket_without_tags_or_permission_has_empty_tags():
+    provider, client = provider_with_client("s3")
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "get_bucket_tagging",
+            service_error_code="NoSuchTagSet",
+            expected_params={"Bucket": "b"},
+        )
+        stub.add_client_error(
+            "get_bucket_tagging",
+            service_error_code="AccessDenied",
+            expected_params={"Bucket": "b"},
+        )
+        assert provider._bucket_tags(client, "b") == {}
+        assert provider._bucket_tags(client, "b") == {}
+
+
+def test_bucket_tag_errors_other_than_missing_are_not_swallowed():
+    provider, client = provider_with_client("s3")
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "get_bucket_tagging",
+            service_error_code="InternalError",
+            expected_params={"Bucket": "b"},
+        )
+        with pytest.raises(ClientError):
+            provider._bucket_tags(client, "b")
+
+
+def test_public_ebs_snapshot_is_collected_and_flagged_critical():
+    provider, client = provider_with_client("ec2")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "describe_snapshots",
+            {
+                "Snapshots": [
+                    {
+                        "SnapshotId": "snap-0123456789abcdef0",
+                        "Encrypted": False,
+                        "Tags": [{"Key": "Environment", "Value": "prod"}],
+                    }
+                ]
+            },
+            {"OwnerIds": ["self"], "RestorableByUserIds": ["all"]},
+        )
+        assets = provider._collect_public_snapshots()
+        stub.assert_no_pending_responses()
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate(assets)
+    assert [finding.rule_id for finding in findings] == ["EBS-003"]
+    assert assets[0].context["internet_exposed"] is True
+    assert assets[0].context["tags"] == {"Environment": "prod"}
+
+
+@pytest.mark.parametrize(
+    "port,rule",
+    [
+        (3306, "NET-003"),
+        (5432, "NET-004"),
+        (1433, "NET-005"),
+        (27017, "NET-006"),
+        (6379, "NET-007"),
+        (9200, "NET-008"),
+    ],
+)
+def test_database_ports_open_to_world_are_flagged(port, rule):
+    asset = Asset(
+        resource_id=f"sg:{port}",
+        resource_type="security_group_rule",
+        name="db",
+        attributes={
+            "from_port": port,
+            "to_port": port,
+            "protocol": "tcp",
+            "source_cidr": "0.0.0.0/0",
+            "port_span": 0,
+        },
+    )
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate([asset])
+    assert {finding.rule_id for finding in findings} == {rule}
+
+
+def test_wide_tcp_range_does_not_fan_out_into_every_database_rule():
+    asset = Asset(
+        resource_id="sg:wide",
+        resource_type="security_group_rule",
+        name="wide",
+        attributes={
+            "from_port": 0,
+            "to_port": 65535,
+            "protocol": "tcp",
+            "source_cidr": "0.0.0.0/0",
+            "port_span": 65535,
+        },
+    )
+    findings = RuleEngine.from_directory(APP_ROOT / "rules").evaluate([asset])
+    assert {finding.rule_id for finding in findings} == {"NET-001", "NET-002"}
+
+
+def test_programmatic_only_user_without_mfa_is_not_flagged_but_console_user_is():
+    def user(console_access):
+        return Asset(
+            resource_id=f"arn:aws:iam::111111111111:user/{console_access}",
+            resource_type="iam_user",
+            name=str(console_access),
+            attributes={"mfa_enabled": False, "console_access": console_access},
+        )
+
+    engine = RuleEngine.from_directory(APP_ROOT / "rules")
+    assert engine.evaluate([user(False)]) == []
+    assert {f.rule_id for f in engine.evaluate([user(True)])} == {"IAM-001"}
