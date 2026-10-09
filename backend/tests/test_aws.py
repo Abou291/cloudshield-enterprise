@@ -523,6 +523,7 @@ def test_multi_region_collect_runs_global_once_and_regional_per_region():
         "_collect_security_groups",
         "_collect_ec2_instances",
         "_collect_ebs",
+        "_collect_public_snapshots",
         "_collect_ebs_default_encryption",
         "_collect_vpc_flow_logs",
         "_collect_rds",
